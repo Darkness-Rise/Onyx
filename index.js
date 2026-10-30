@@ -30,7 +30,7 @@ for (const file of commandFiles) {
 const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
     console.log(`¡Bot conectado y listo como ${client.user.tag}!`);
 
     // Registrar los comandos de barra en Discord automáticamente
