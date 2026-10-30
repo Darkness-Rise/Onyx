@@ -9,7 +9,7 @@ const client = new Client({
     ]
 });
 
-// En Railway leeremos esto de las Variables de Entorno (usando tu variable correcta)
+// En Railway leemos esto de las Variables de Entorno (usando tu variable correcta)
 const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -48,15 +48,17 @@ async function consultarOpenRouter(prompt) {
     const url = "https://openrouter.ai/api/v1/chat/completions";
 
     const response = await fetch(url, {
-        method: "POST",
-        headers: {
+        "method": "POST",
+        "headers": {
             "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-            "HTTP-Referer": "https://github.com/tu-usuario/tu-repo", // Opcional para OpenRouter
-            "X-Title": "Mi Bot de Discord",             // Opcional
+            "HTTP-Referer": "https://github.com/tu-usuario/tu-repo", 
+            "X-Title": "Mi Bot de Discord",             
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-            "model": "google/gemini-2.5-flash", // Modelo actualizado y activo en OpenRouter
+        "body": JSON.stringify({
+            // Usamos un modelo gratuito de OpenRouter para que no gaste saldo
+            "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+            "max_tokens": 500, // Limitamos los tokens para evitar errores de saldo
             "messages": [
                 { "role": "user", "content": prompt }
             ]
