@@ -10,7 +10,7 @@ const client = new Client({
 });
 
 // En Railway leeremos esto de las Variables de Entorno
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 client.once('ready', () => {
