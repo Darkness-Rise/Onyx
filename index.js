@@ -1,6 +1,7 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const fs = require('node:fs');
+const path = require('node:path');
+const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
 
-// Configuración del cliente de Discord con los intents necesarios
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -9,21 +10,67 @@ const client = new Client({
     ]
 });
 
-// En Railway leemos esto de las Variables de Entorno (usando tu variable correcta)
+client.commands = new Collection();
+
+// Cargar comandos desde la carpeta Commands
+const commandsPath = path.join(__dirname, 'Commands');
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+
+const commandsJson = [];
+
+for (const file of commandFiles) {
+    const filePath = path.join(commandsPath, file);
+    const command = require(filePath);
+    if ('data' in command && 'execute' in command) {
+        client.commands.set(command.data.name, command);
+        commandsJson.push(command.data.toJSON());
+    }
+}
+
 const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-client.once('ready', () => {
+client.once('ready', async () => {
     console.log(`¡Bot conectado y listo como ${client.user.tag}!`);
+
+    // Registrar los comandos de barra en Discord automáticamente
+    const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
+    try {
+        console.log('Registrando comandos de barra (Slash Commands)...');
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: commandsJson },
+        );
+        console.log('¡Comandos registrados con éxito!');
+    } catch (error) {
+        console.error(error);
+    }
 });
 
+// Manejador de interacciones (Slash Commands)
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    const command = client.commands.get(interaction.commandName);
+    if (!command) return;
+
+    try {
+        await command.execute(interaction);
+    } catch (error) {
+        console.error(error);
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: 'Hubo un error al ejecutar este comando.', ephemeral: true });
+        } else {
+            await interaction.reply({ content: 'Hubo un error al ejecutar este comando.', ephemeral: true });
+        }
+    }
+});
+
+// Manejador de menciones para la IA (con límite de 50 tokens)
 client.on('messageCreate', async (message) => {
-    // Evitar que el bot se responda a sí mismo
     if (message.author.bot) return;
 
-    // Si mencionan al bot
     if (message.mentions.has(client.user)) {
-        // Limpiamos la mención del texto para dejar solo la pregunta
         const prompt = message.content.replace(`<@!${client.user.id}>`, '').replace(`<@${client.user.id}>`, '').trim();
 
         if (!prompt) {
@@ -31,7 +78,6 @@ client.on('messageCreate', async (message) => {
             return;
         }
 
-        // Mostrar indicador de "escribiendo..." en el canal
         await message.channel.sendTyping();
 
         try {
@@ -48,17 +94,16 @@ async function consultarOpenRouter(prompt) {
     const url = "https://openrouter.ai/api/v1/chat/completions";
 
     const response = await fetch(url, {
-        "method": "POST",
-        "headers": {
+        method: "POST",
+        headers: {
             "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-            "HTTP-Referer": "https://github.com/tu-usuario/tu-repo", 
-            "X-Title": "Mi Bot de Discord",             
+            "HTTP-Referer": "https://github.com/Darkness-Rise/Onyx", 
+            "X-Title": "Onyx Bot",             
             "Content-Type": "application/json"
         },
-        "body": JSON.stringify({
-            // Usamos un modelo gratuito de OpenRouter para que no gaste saldo
+        body: JSON.stringify({
             "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-            "max_tokens": 500, // Limitamos los tokens para evitar errores de saldo
+            "max_tokens": 50, // ¡Costo de tokens bajado a 50 como pediste!
             "messages": [
                 { "role": "user", "content": prompt }
             ]
