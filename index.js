@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
+const { obtenerPromptSistema } = require('./Config/personality'); // <--- Importamos la personalidad desde su carpeta
 
 const client = new Client({
     intents: [
@@ -66,7 +67,7 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Manejador de menciones para la IA (con límite de 50 tokens)
+// Manejador de menciones para la IA con personalidad modular
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -81,7 +82,11 @@ client.on('messageCreate', async (message) => {
         await message.channel.sendTyping();
 
         try {
-            const respuestaIA = await consultarOpenRouter(prompt);
+            // Obtenemos el ID de quien escribe para inyectar su respectivo rol de sistema
+            const userId = message.author.id;
+            const systemPrompt = obtenerPromptSistema(userId);
+
+            const respuestaIA = await consultarOpenRouter(prompt, systemPrompt);
             await message.reply(respuestaIA);
         } catch (error) {
             console.error("Error al consultar OpenRouter:", error);
@@ -90,7 +95,7 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-async function consultarOpenRouter(prompt) {
+async function consultarOpenRouter(prompt, systemPrompt) {
     const url = "https://openrouter.ai/api/v1/chat/completions";
 
     const response = await fetch(url, {
@@ -103,8 +108,9 @@ async function consultarOpenRouter(prompt) {
         },
         body: JSON.stringify({
             "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-            "max_tokens": 50, // ¡Costo de tokens bajado a 50 como pediste!
+            "max_tokens": 50, // Mantenemos el límite económico de 50 tokens
             "messages": [
+                { "role": "system", "content": systemPrompt }, // Inyectamos la personalidad según el usuario
                 { "role": "user", "content": prompt }
             ]
         })
