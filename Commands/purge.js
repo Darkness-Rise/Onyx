@@ -4,15 +4,15 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('purge')
         .setDescription('Borra hasta 200 mensajes, opcionalmente filtrados por usuario.')
-        .addIntegerOption(option =>
-            option.name('cantidad')
-                .setDescription('Número de mensajes a revisar (entre 1 y 200)')
-                .setRequired(true)
+        .addIntegerOption(option => 
+            option.setName('cantidad')
+                  .setDescription('Número de mensajes a revisar (entre 1 y 200)')
+                  .setRequired(true)
         )
-        .addUserOption(option =>
-            option.name('usuario')
-                .setDescription('Filtrar mensajes de un usuario específico')
-                .setRequired(false)
+        .addUserOption(option => 
+            option.setName('usuario')
+                  .setDescription('Filtrar mensajes de un usuario específico')
+                  .setRequired(false)
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
