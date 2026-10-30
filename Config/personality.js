@@ -1,4 +1,4 @@
-const JEFE_ID = "TU_ID_DE_DISCORD_AQUI"; // <--- Reemplaza esto con tu ID real de usuario de Discord
+const JEFE_ID = "1535030930534568088"; // <--- Reemplaza esto con tu ID real de usuario de Discord
 
 function obtenerPromptSistema(userId) {
     const esJefe = (userId === JEFE_ID);
