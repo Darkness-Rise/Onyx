@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
-const { obtenerPromptSistema } = require('./Config/personality'); // <--- Importamos la personalidad desde su carpeta
+const { obtenerPromptSistema } = require('./Config/personality');
 
 const client = new Client({
     intents: [
@@ -67,7 +67,7 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Manejador de menciones para la IA con personalidad modular
+// Manejador de menciones para la IA con personalidad modular y respaldo de contenido vacío
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -75,14 +75,13 @@ client.on('messageCreate', async (message) => {
         const prompt = message.content.replace(`<@!${client.user.id}>`, '').replace(`<@${client.user.id}>`, '').trim();
 
         if (!prompt) {
-            await message.reply("¡Ey! Dime algo, no me dejes en blanco. 😅");
+            await message.reply("👁️... (Asiente en silencio y te mira fijamente, esperando que digas algo útil).");
             return;
         }
 
         await message.channel.sendTyping();
 
         try {
-            // Obtenemos el ID de quien escribe para inyectar su respectivo rol de sistema
             const userId = message.author.id;
             const systemPrompt = obtenerPromptSistema(userId);
 
@@ -90,7 +89,7 @@ client.on('messageCreate', async (message) => {
             await message.reply(respuestaIA);
         } catch (error) {
             console.error("Error al consultar OpenRouter:", error);
-            await message.reply("Uf, tuve un problema conectándome con la IA. Inténtalo de nuevo más tarde.");
+            await message.reply("👁️... (Mantiene la mirada fría). Tuve un problema conectándome con los servidores. Inténtalo más tarde.");
         }
     }
 });
@@ -108,9 +107,9 @@ async function consultarOpenRouter(prompt, systemPrompt) {
         },
         body: JSON.stringify({
             "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-            "max_tokens": 50, // Mantenemos el límite económico de 50 tokens
+            "max_tokens": 50,
             "messages": [
-                { "role": "system", "content": systemPrompt }, // Inyectamos la personalidad según el usuario
+                { "role": "system", "content": systemPrompt },
                 { "role": "user", "content": prompt }
             ]
         })
@@ -122,7 +121,15 @@ async function consultarOpenRouter(prompt, systemPrompt) {
     }
 
     const data = await response.json();
-    return data.choices[0].message.content;
+    console.log("Respuesta completa de OpenRouter:", JSON.stringify(data));
+
+    let textoRespuesta = data.choices?.[0]?.message?.content;
+
+    if (!textoRespuesta || textoRespuesta.trim() === "") {
+        textoRespuesta = "👁️... (Asiente en silencio y revisa el cargador de su arma).";
+    }
+
+    return textoRespuesta;
 }
 
 client.login(DISCORD_TOKEN);
