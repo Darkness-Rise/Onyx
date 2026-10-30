@@ -9,7 +9,7 @@ const client = new Client({
     ]
 });
 
-// En Railway leeremos esto de las Variables de Entorno
+// En Railway leeremos esto de las Variables de Entorno (usando tu variable correcta)
 const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -56,7 +56,7 @@ async function consultarOpenRouter(prompt) {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            "model": "google/gemini-flash-1.5", // O el modelo que prefieras usar
+            "model": "google/gemini-2.5-flash", // Modelo actualizado y activo en OpenRouter
             "messages": [
                 { "role": "user", "content": prompt }
             ]
