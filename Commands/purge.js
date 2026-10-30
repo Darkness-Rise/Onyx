@@ -7,11 +7,13 @@ module.exports = {
         .addIntegerOption(option =>
             option.name('cantidad')
                 .setDescription('Número de mensajes a revisar (entre 1 y 200)')
-                .setRequired(true))
+                .setRequired(true)
+        )
         .addUserOption(option =>
             option.name('usuario')
                 .setDescription('Filtrar mensajes de un usuario específico')
-                .setRequired(false))
+                .setRequired(false)
+        )
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
     async execute(interaction) {
@@ -38,7 +40,7 @@ module.exports = {
 
             if (mensajesABorrar.length === 0) {
                 return interaction.editReply(usuarioObjetivo 
-                    ? `No encontré mensajes recientes de ${usuarioObjetivo.tag} para borrar.` 
+                    ? `No encontré mensajes recientes de ese usuario para borrar.` 
                     : 'No hay mensajes para borrar.');
             }
 
@@ -51,7 +53,7 @@ module.exports = {
 
             await interaction.channel.bulkDelete(mensajesABorrar, true);
 
-            const textoUsuario = usuarioObjetivo ? ` de ${usuarioObjetivo.tag}` : '';
+            const textoUsuario = usuarioObjetivo ? ` de ese usuario` : '';
             await interaction.editReply(`¡Listo! Se han limpiado ${mensajesABorrar.length} mensajes${textoUsuario}.`);
 
         } catch (error) {
