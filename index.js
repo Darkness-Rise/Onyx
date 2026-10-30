@@ -107,7 +107,7 @@ async function consultarOpenRouter(prompt, systemPrompt) {
         },
         body: JSON.stringify({
             "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-            "max_tokens": 50,
+            "max_tokens": 150, // Ajustado a 150 para que alcance a razonar y responder con texto plano
             "messages": [
                 { "role": "system", "content": systemPrompt },
                 { "role": "user", "content": prompt }
