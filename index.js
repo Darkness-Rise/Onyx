@@ -75,7 +75,7 @@ client.on('messageCreate', async (message) => {
         const prompt = message.content.replace(`<@!${client.user.id}>`, '').replace(`<@${client.user.id}>`, '').trim();
 
         if (!prompt) {
-            await message.reply("👁️... (Asiente en silencio y te mira fijamente, esperando que digas algo útil).");
+            await message.reply("Te escucho, jefe. Habla rápido.");
             return;
         }
 
@@ -89,7 +89,7 @@ client.on('messageCreate', async (message) => {
             await message.reply(respuestaIA);
         } catch (error) {
             console.error("Error al consultar OpenRouter:", error);
-            await message.reply("👁️... (Mantiene la mirada fría). Tuve un problema conectándome con los servidores. Inténtalo más tarde.");
+            await message.reply("Comandante, la señal oscila. Hubo un problema conectando con los servidores.");
         }
     }
 });
@@ -107,7 +107,7 @@ async function consultarOpenRouter(prompt, systemPrompt) {
         },
         body: JSON.stringify({
             "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-            "max_tokens": 150, // Ajustado a 150 para que alcance a razonar y responder con texto plano
+            "max_tokens": 150,
             "messages": [
                 { "role": "system", "content": systemPrompt },
                 { "role": "user", "content": prompt }
@@ -126,7 +126,13 @@ async function consultarOpenRouter(prompt, systemPrompt) {
     let textoRespuesta = data.choices?.[0]?.message?.content;
 
     if (!textoRespuesta || textoRespuesta.trim() === "") {
-        textoRespuesta = "👁️... (Asiente en silencio y revisa el cargador de su arma).";
+        const respaldos = [
+            "Asiente en silencio y ajusta las correas de su equipo táctico.",
+            "Comandante, la transmisión falló un segundo. Repita.",
+            "Da un trago rápido a su vaso de vino y te mira fijamente, jefe.",
+            "Revisa el cierre de sus guantes tácticos esperando tu orden."
+        ];
+        textoRespuesta = respaldos[Math.floor(Math.random() * respaldos.length)];
     }
 
     return textoRespuesta;
