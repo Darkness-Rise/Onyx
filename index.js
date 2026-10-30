@@ -1,47 +1,75 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const mongoose = require('mongoose');
-const { consultarIA } = require('./services/aiService'); // Importamos el servicio de IA
 
+// Configuración del cliente de Discord con los intents necesarios
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
     ]
 });
 
-// Conexión a MongoDB
-if (process.env.MONGODB_URI) {
-    mongoose.connect(process.env.MONGODB_URI)
-        .then(() => console.log('🟢 [DB]: Onyx se ha conectado a la base de datos de la mafia.'))
-        .catch(err => console.error('🔴 [DB Error]: No se pudo conectar a MongoDB:', err));
-}
+// En Railway leeremos esto de las Variables de Entorno
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 client.once('ready', () => {
-    console.log(`🖤 [Onyx]: El ejecutor ${client.user.tag} está en línea y vigilando el territorio.`);
+    console.log(`¡Bot conectado y listo como ${client.user.tag}!`);
 });
 
-// Escucha de mensajes para interactuar con la IA
 client.on('messageCreate', async (message) => {
+    // Evitar que el bot se responda a sí mismo
     if (message.author.bot) return;
 
-    // Si mencionan al bot o usan el prefijo, procesa con la IA de OpenRouter
+    // Si mencionan al bot
     if (message.mentions.has(client.user)) {
-        // Limpiamos la mención del texto para enviarle solo la pregunta limpia a la IA
-        const textoLimpio = message.content.replace(/<@!?\d+>/g, '').trim();
-        
-        if (!textoLimpio) {
-            await message.reply('*Ajusta su máscara en silencio, esperando instrucciones.*');
+        // Limpiamos la mención del texto para dejar solo la pregunta
+        const prompt = message.content.replace(`<@!${client.user.id}>`, '').replace(`<@${client.user.id}>`, '').trim();
+
+        if (!prompt) {
+            await message.reply("¡Ey! Dime algo, no me dejes en blanco. 😅");
             return;
         }
 
-        // Mostrar indicador de que está escribiendo/pensando
+        // Mostrar indicador de "escribiendo..." en el canal
         await message.channel.sendTyping();
 
-        // Consultar a la IA
-        const respuestaIA = await consultarIA(textoLimpio);
-        await message.reply(respuestaIA);
+        try {
+            const respuestaIA = await consultarOpenRouter(prompt);
+            await message.reply(respuestaIA);
+        } catch (error) {
+            console.error("Error al consultar OpenRouter:", error);
+            await message.reply("Uf, tuve un problema conectándome con la IA. Inténtalo de nuevo más tarde.");
+        }
     }
 });
 
-client.login(process.env.DISCORD_BOT_TOKEN);
+async function consultarOpenRouter(prompt) {
+    const url = "https://openrouter.ai/api/v1/chat/completions";
+
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+            "HTTP-Referer": "https://github.com/tu-usuario/tu-repo", // Opcional para OpenRouter
+            "X-Title": "Mi Bot de Discord",             // Opcional
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            "model": "google/gemini-flash-1.5", // O el modelo que prefieras usar
+            "messages": [
+                { "role": "user", "content": prompt }
+            ]
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error de API (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+}
+
+client.login(DISCORD_TOKEN);
