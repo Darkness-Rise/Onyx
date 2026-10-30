@@ -3,10 +3,10 @@ const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('purge')
-        .setDescription('Borra hasta 200 mensajes, opcionalmente filtrados por usuario.')
+        .setDescription('Borra hasta 100 mensajes, opcionalmente filtrados por usuario.')
         .addIntegerOption(option => 
             option.setName('cantidad')
-                  .setDescription('Número de mensajes a revisar (entre 1 y 200)')
+                  .setDescription('Número de mensajes a revisar (entre 1 y 100)')
                   .setRequired(true)
         )
         .addUserOption(option => 
@@ -22,21 +22,18 @@ module.exports = {
         const cantidad = interaction.options.getInteger('cantidad');
         const usuarioObjetivo = interaction.options.getUser('usuario');
 
-        if (cantidad <= 0 || cantidad > 200) {
-            return interaction.editReply('Por favor, indica un número válido de mensajes a revisar (entre 1 y 200).');
+        if (cantidad <= 0 || cantidad > 100) {
+            return interaction.editReply('Por favor, indica un número válido de mensajes a revisar (entre 1 y 100).');
         }
 
         try {
-            let fetchLimit = cantidad > 100 ? 200 : cantidad;
-            const fetchedMessages = await interaction.channel.messages.fetch({ limit: fetchLimit });
+            const fetchedMessages = await interaction.channel.messages.fetch({ limit: cantidad });
 
             let mensajesABorrar = Array.from(fetchedMessages.values());
 
             if (usuarioObjetivo) {
                 mensajesABorrar = mensajesABorrar.filter(msg => msg.author.id === usuarioObjetivo.id);
             }
-
-            mensajesABorrar = mensajesABorrar.slice(0, cantidad);
 
             if (mensajesABorrar.length === 0) {
                 return interaction.editReply(usuarioObjetivo 
