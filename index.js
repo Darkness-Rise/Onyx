@@ -13,7 +13,6 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// Cargar comandos desde la carpeta Commands
 const commandsPath = path.join(__dirname, 'Commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
@@ -34,7 +33,6 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 client.once('clientReady', async () => {
     console.log(`¡Bot conectado y listo como ${client.user.tag}!`);
 
-    // Registrar los comandos de barra en Discord automáticamente
     const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     try {
         console.log('Registrando comandos de barra (Slash Commands)...');
@@ -48,7 +46,6 @@ client.once('clientReady', async () => {
     }
 });
 
-// Manejador de interacciones (Slash Commands)
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
@@ -67,7 +64,6 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Manejador de menciones para la IA con personalidad modular y respaldo de contenido vacío
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -107,7 +103,7 @@ async function consultarOpenRouter(prompt, systemPrompt) {
         },
         body: JSON.stringify({
             "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-            "max_tokens": 250, // Subido a 250 para que nunca corte las oraciones a medias
+            "max_tokens": 500, // Subido a 500 tokens para garantizar respuestas largas y detalladas con asteriscos
             "messages": [
                 { "role": "system", "content": systemPrompt },
                 { "role": "user", "content": prompt }
@@ -127,10 +123,10 @@ async function consultarOpenRouter(prompt, systemPrompt) {
 
     if (!textoRespuesta || textoRespuesta.trim() === "") {
         const respaldos = [
-            "*Asiente en silencio y ajusta con calma las correas de su equipo táctico.* Comandante, la señal oscila.",
-            "*Da un trago pausado a su vaso de vino añejado y te mira fijamente.* Lo escucho, jefe.",
-            "*Revisa el cierre de sus guantes tácticos con total seriedad.* Repita la orden, comandante.",
-            "*Inclina levemente la cabeza en señal de respeto.* Las comunicaciones fallan, jefe. Adelante."
+            "*Asiente en silencio y ajusta con calma las correas de su equipo táctico.* Comandante, la señal oscila un momento.",
+            "*Da un trago pausado a su vaso de vino añejado y te mira fijamente.* Lo escucho, jefe, adelante.",
+            "*Revisa el cierre de sus guantes tácticos con total seriedad.* Las comunicaciones satelitales fluctúan, comandante.",
+            "*Inclina levemente la cabeza en señal de respeto.* Estoy a la espera de sus órdenes directas, jefe."
         ];
         textoRespuesta = respaldos[Math.floor(Math.random() * respaldos.length)];
     }
