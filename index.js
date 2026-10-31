@@ -1,7 +1,16 @@
+// Escudo de seguridad global para evitar que el bot se caiga por errores inesperados
+process.on('unhandledRejection', error => {
+    console.error('Error no manejado en el sistema:', error);
+});
+
+process.on('uncaughtException', error => {
+    console.error('Excepción no capturada:', error);
+});
+
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
-const { obtenerPromptSistema } = require('./Config/personality');
+const { consultarOpenRouter } = require('./Services/openrouter');
 
 const client = new Client({
     intents: [
@@ -28,7 +37,6 @@ for (const file of commandFiles) {
 }
 
 const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 client.once('clientReady', async () => {
     console.log(`¡Bot conectado y listo como ${client.user.tag}!`);
@@ -64,7 +72,6 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Manejador de mensajes para menciones o cuando mencionan su nombre en el texto
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -72,9 +79,7 @@ client.on('messageCreate', async (message) => {
     const esMencionado = message.mentions.has(client.user);
     const diceSuNombre = contenidoMensaje.includes('onyx');
 
-    // Responde si lo etiquetan o si mencionan su nombre en la oración
     if (esMencionado || diceSuNombre) {
-        // Limpiamos la mención del bot si la tiene para que el prompt quede limpio
         const prompt = message.content
             .replace(`<@!${client.user.id}>`, '')
             .replace(`<@${client.user.id}>`, '')
@@ -89,9 +94,7 @@ client.on('messageCreate', async (message) => {
 
         try {
             const userId = message.author.id;
-            const systemPrompt = obtenerPromptSistema(userId);
-
-            const respuestaIA = await consultarOpenRouter(prompt, systemPrompt);
+            const respuestaIA = await consultarOpenRouter(prompt, userId);
             await message.reply(respuestaIA);
         } catch (error) {
             console.error("Error al consultar OpenRouter:", error);
@@ -99,49 +102,5 @@ client.on('messageCreate', async (message) => {
         }
     }
 });
-
-async function consultarOpenRouter(prompt, systemPrompt) {
-    const url = "https://openrouter.ai/api/v1/chat/completions";
-
-    const response = await fetch(url, {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-            "HTTP-Referer": "https://github.com/Darkness-Rise/Onyx", 
-            "X-Title": "Onyx Bot",             
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            "model": "google/gemini-2.5-flash",
-            "max_tokens": 500,
-            "messages": [
-                { "role": "system", "content": systemPrompt },
-                { "role": "user", "content": prompt }
-            ]
-        })
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error de API (${response.status}): ${errorText}`);
-    }
-
-    const data = await response.json();
-    console.log("Respuesta completa de OpenRouter:", JSON.stringify(data));
-
-    let textoRespuesta = data.choices?.[0]?.message?.content;
-
-    if (!textoRespuesta || textoRespuesta.trim() === "") {
-        const respaldos = [
-            "*Asiente en silencio y ajusta con calma las correas de su equipo táctico.* Comandante, la señal oscila un momento.",
-            "*Da un trago pausado a su vaso de vino añejado y te mira fijamente.* Lo escucho, jefe, adelante.",
-            "*Revisa el cierre de sus guantes tácticos con total seriedad.* Las comunicaciones satelitales fluctúan, comandante.",
-            "*Inclina levemente la cabeza en señal de respeto.* Estoy a la espera de sus órdenes directas, jefe."
-        ];
-        textoRespuesta = respaldos[Math.floor(Math.random() * respaldos.length)];
-    }
-
-    return textoRespuesta;
-}
 
 client.login(DISCORD_TOKEN);
