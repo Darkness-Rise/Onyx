@@ -1,4 +1,4 @@
-const JEFE_ID = "AQUI_PON_TU_ID_DE_DISCORD"; // <--- Tu ID real de Discord
+const JEFE_ID = "1535030930534568088"; // <--- Tu ID real de Discord
 
 function obtenerPromptSistema(userId) {
     const esJefe = String(userId).trim() === String(JEFE_ID).trim();
