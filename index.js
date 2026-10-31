@@ -75,7 +75,7 @@ client.on('messageCreate', async (message) => {
         const prompt = message.content.replace(`<@!${client.user.id}>`, '').replace(`<@${client.user.id}>`, '').trim();
 
         if (!prompt) {
-            await message.reply("Te escucho, jefe. Habla rápido.");
+            await message.reply("*Cruza los brazos con seriedad desde detrás de su máscara táctica.* Te escucho, jefe. Habla rápido.");
             return;
         }
 
@@ -89,7 +89,7 @@ client.on('messageCreate', async (message) => {
             await message.reply(respuestaIA);
         } catch (error) {
             console.error("Error al consultar OpenRouter:", error);
-            await message.reply("Comandante, la señal oscila. Hubo un problema conectando con los servidores.");
+            await message.reply("*Da un golpecito seco en su auricular.* Comandante, la transmisión falló un segundo. Reintente.");
         }
     }
 });
@@ -107,7 +107,7 @@ async function consultarOpenRouter(prompt, systemPrompt) {
         },
         body: JSON.stringify({
             "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-            "max_tokens": 150,
+            "max_tokens": 250, // Subido a 250 para que nunca corte las oraciones a medias
             "messages": [
                 { "role": "system", "content": systemPrompt },
                 { "role": "user", "content": prompt }
@@ -127,10 +127,10 @@ async function consultarOpenRouter(prompt, systemPrompt) {
 
     if (!textoRespuesta || textoRespuesta.trim() === "") {
         const respaldos = [
-            "Asiente en silencio y ajusta las correas de su equipo táctico.",
-            "Comandante, la transmisión falló un segundo. Repita.",
-            "Da un trago rápido a su vaso de vino y te mira fijamente, jefe.",
-            "Revisa el cierre de sus guantes tácticos esperando tu orden."
+            "*Asiente en silencio y ajusta con calma las correas de su equipo táctico.* Comandante, la señal oscila.",
+            "*Da un trago pausado a su vaso de vino añejado y te mira fijamente.* Lo escucho, jefe.",
+            "*Revisa el cierre de sus guantes tácticos con total seriedad.* Repita la orden, comandante.",
+            "*Inclina levemente la cabeza en señal de respeto.* Las comunicaciones fallan, jefe. Adelante."
         ];
         textoRespuesta = respaldos[Math.floor(Math.random() * respaldos.length)];
     }
