@@ -64,14 +64,24 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
+// Manejador de mensajes para menciones o cuando mencionan su nombre en el texto
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    if (message.mentions.has(client.user)) {
-        const prompt = message.content.replace(`<@!${client.user.id}>`, '').replace(`<@${client.user.id}>`, '').trim();
+    const contenidoMensaje = message.content.toLowerCase();
+    const esMencionado = message.mentions.has(client.user);
+    const diceSuNombre = contenidoMensaje.includes('onyx');
+
+    // Responde si lo etiquetan o si mencionan su nombre en la oración
+    if (esMencionado || diceSuNombre) {
+        // Limpiamos la mención del bot si la tiene para que el prompt quede limpio
+        const prompt = message.content
+            .replace(`<@!${client.user.id}>`, '')
+            .replace(`<@${client.user.id}>`, '')
+            .trim();
 
         if (!prompt) {
-            await message.reply("*Cruza los brazos con seriedad desde detrás de su máscara táctica.* Te escucho, jefe. Habla rápido.");
+            await message.reply("*Cruza los brazos con seriedad desde detrás de su máscara táctica.* ¿Dijeron mi nombre? Hablen rápido.");
             return;
         }
 
@@ -102,7 +112,7 @@ async function consultarOpenRouter(prompt, systemPrompt) {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            "model": "google/gemini-2.5-flash", // <--- Modelo cambiado a Gemini 2.5 Flash
+            "model": "google/gemini-2.5-flash",
             "max_tokens": 500,
             "messages": [
                 { "role": "system", "content": systemPrompt },
