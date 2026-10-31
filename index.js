@@ -102,8 +102,8 @@ async function consultarOpenRouter(prompt, systemPrompt) {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-            "max_tokens": 500, // Subido a 500 tokens para garantizar respuestas largas y detalladas con asteriscos
+            "model": "google/gemini-2.5-flash", // <--- Modelo cambiado a Gemini 2.5 Flash
+            "max_tokens": 500,
             "messages": [
                 { "role": "system", "content": systemPrompt },
                 { "role": "user", "content": prompt }
