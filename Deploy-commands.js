@@ -18,15 +18,15 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN)
 
 (async () => {
     try {
-        console.log(`Iniciando el despliegue de ${commands.length} comandos (/) de la aplicación.`);
+        console.log(`Iniciando el despliegue de ${commands.length} comandos (/) para el servidor específico.`);
 
-        // Usando directamente el ID de tu bot para registrar los comandos globales
+        // Despliegue instantáneo en tu servidor (Guild Commands)
         const data = await rest.put(
-            Routes.applicationCommands('1562899179964211200'),
+            Routes.applicationGuildCommands('1562899179964211200', '1560958563034341388'),
             { body: commands },
         );
 
-        console.log(`¡Se recargaron con éxito ${data.length} comandos (/) de la aplicación!`);
+        console.log(`¡Se recargaron con éxito ${data.length} comandos (/) en el servidor!`);
     } catch (error) {
         console.error(error);
     }
