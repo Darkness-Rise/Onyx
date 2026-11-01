@@ -137,7 +137,8 @@ client.on('interactionCreate', async interaction => {
 });
 
 client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
+    // Ignorar si el autor es un bot o si es el propio Onyx respondiendo
+    if (message.author.bot || message.author.id === client.user.id) return;
 
     const contenidoMensaje = message.content.toLowerCase();
     const esMencionado = message.mentions.has(client.user);
