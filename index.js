@@ -6,7 +6,7 @@ process.on('uncaughtException', error => {
     console.error('Excepción no capturada:', error);
 });
 
-// --- Servidor web integrado para cumplir con los requisitos de Render ---
+// --- Servidor web integrado para cumplir con los requisitos de Render / Railway ---
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,9 +47,75 @@ for (const file of commandFiles) {
 }
 
 const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
+const rutaConfigCanales = path.join(__dirname, 'Config/canales.json');
+
+function leerConfigCanales() {
+    if (!fs.existsSync(rutaConfigCanales)) return {};
+    try {
+        return JSON.parse(fs.readFileSync(rutaConfigCanales, 'utf8'));
+    } catch (e) {
+        return {};
+    }
+}
+
+// --- SISTEMA DE ACCIONES AUTÓNOMAS Y PRESENCIA DINÁMICA MULTI-SERVIDOR ---
+function iniciarSistemaAutonomoMultiServidor() {
+    const estadosDinamicos = [
+        { name: 'vigilando los accesos del cártel', type: 3 }, // Watching
+        { name: 'un buen vino tinto', type: 2 },                // Listening
+        { name: 'limpiando el cañón de su arma', type: 0 },     // Playing
+        { name: 'revisando el perímetro en silencio', type: 3 } // Watching
+    ];
+
+    const actualizarPresencia = () => {
+        const estadoAleatorio = estadosDinamicos[Math.floor(Math.random() * estadosDinamicos.length)];
+        client.user.setPresence({
+            activities: [estadoAleatorio],
+            status: 'dnd', // No molestar
+        });
+    };
+
+    actualizarPresencia();
+    setInterval(actualizarPresencia, 30 * 60 * 1000); // Rota el estado cada 30 min
+
+    const obtenerTiempoAleatorio = () => {
+        const minMinutos = 30;
+        const maxMinutos = 90;
+        return (Math.random() * (maxMinutos - minMinutos) + minMinutos) * 60 * 1000;
+    };
+
+    const ejecutarRondas = async () => {
+        const config = leerConfigCanales();
+        
+        for (const [guildId, channelId] of Object.entries(config)) {
+            try {
+                const guild = client.guilds.cache.get(guildId);
+                if (!guild) continue;
+
+                const canal = await guild.channels.fetch(channelId);
+                if (canal) {
+                    const promptAccion = "Genera una acción corta y aleatoria en tercera persona (*como esta*) de lo que estás haciendo en este momento en el servidor (ej: patrullando los pasillos, limpiando tu arma, bebiendo vino, ajustando tus guantes o tu máscara). Sé breve, directo y mantén tu personalidad fría de ex-militar.";
+                    
+                    const accionGenerada = await consultarOpenRouter(promptAccion, `sistema-autonomo-${guildId}`);
+                    if (accionGenerada) {
+                        await canal.send(accionGenerada);
+                    }
+                }
+            } catch (err) {
+                console.error(`No se pudo enviar patrulla en el servidor ${guildId}:`, err);
+            }
+        }
+
+        setTimeout(ejecutarRondas, obtenerTiempoAleatorio());
+    };
+
+    setTimeout(ejecutarRondas, obtenerTiempoAleatorio());
+}
+// -------------------------------------------------------------------------
 
 client.once('ready', () => {
     console.log(`¡Bot conectado y listo como ${client.user.tag}! El sistema está estable.`);
+    iniciarSistemaAutonomoMultiServidor();
 });
 
 client.on('interactionCreate', async interaction => {
