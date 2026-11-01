@@ -6,6 +6,20 @@ process.on('uncaughtException', error => {
     console.error('Excepción no capturada:', error);
 });
 
+// --- Servidor web integrado para cumplir con los requisitos de Render ---
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.send('¡Onyx bot está activo y operando!');
+});
+
+app.listen(PORT, () => {
+    console.log(`Servidor web interno corriendo en el puerto ${PORT}`);
+});
+// ---------------------------------------------------------------------
+
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
