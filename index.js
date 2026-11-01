@@ -38,7 +38,8 @@ for (const file of commandFiles) {
 
 const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
 
-client.once('clientReady', async () => {
+// Cambiamos a 'ready' para asegurar la compatibilidad total del ciclo de vida en Railway
+client.once('ready', async () => {
     console.log(`¡Bot conectado y listo como ${client.user.tag}!`);
 
     const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
@@ -50,7 +51,7 @@ client.once('clientReady', async () => {
         );
         console.log('¡Comandos registrados con éxito!');
     } catch (error) {
-        console.error(error);
+        console.error("Error registrando comandos:", error);
     }
 });
 
@@ -101,6 +102,13 @@ client.on('messageCreate', async (message) => {
             await message.reply("*Da un golpecito seco en su auricular.* Comandante, la transmisión falló un segundo. Reintente.");
         }
     }
+});
+
+// Mantener el proceso vivo ante señales del sistema de forma limpia
+process.on('SIGTERM', () => {
+    console.log('Recibida señal SIGTERM, cerrando sesión del bot ordenadamente...');
+    client.destroy();
+    process.exit(0);
 });
 
 client.login(DISCORD_TOKEN);
