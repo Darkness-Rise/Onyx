@@ -14,7 +14,8 @@ module.exports = {
                   .setDescription('Filtrar mensajes de un usuario específico')
                   .setRequired(false)
         )
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+        // Restringido exclusivamente para Administradores
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
         await interaction.deferReply({ ephemeral: true });
