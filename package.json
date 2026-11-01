@@ -4,6 +4,7 @@
   "description": "Sirviente-en-FAR",
   "main": "index.js",
   "scripts": {
+  "build": "node deploy-commands.js",
     "start": "node index.js"
   },
   "dependencies": {
