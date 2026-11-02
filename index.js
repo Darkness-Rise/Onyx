@@ -1,4 +1,4 @@
-Process.on('unhandledRejection', error => {
+process.on('unhandledRejection', error => {
     console.error('Error no manejado en el sistema:', error);
 });
 
@@ -22,7 +22,8 @@ app.listen(PORT, () => {
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
+const { exec } = require('node:child_process');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { consultarOpenRouter } = require('./Services/openrouter');
 
 const client = new Client({
@@ -38,14 +39,11 @@ client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'Commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
-const commandsArray = []; // Arreglo auxiliar para registrar comandos en Discord automáticamente
-
 for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
     const command = require(filePath);
     if ('data' in command && 'execute' in command) {
         client.commands.set(command.data.name, command);
-        commandsArray.push(command.data.toJSON());
     }
 }
 
@@ -81,28 +79,41 @@ function iniciarSistemaAutonomoMultiServidor() {
     actualizarPresencia();
     setInterval(actualizarPresencia, 30 * 60 * 1000); // Rota el estado cada 30 min
 
+    // TIEMPO DE PRUEBA: 1 a 2 minutos para ver si salta rápido
     const obtenerTiempoAleatorio = () => {
-        const minMinutos = 30;
-        const maxMinutos = 90;
+        const minMinutos = 1;
+        const maxMinutos = 2;
         return (Math.random() * (maxMinutos - minMinutos) + minMinutos) * 60 * 1000;
     };
 
     const ejecutarRondas = async () => {
         const config = leerConfigCanales();
+        console.log("[PATRULLAJE] Configuración leída de canales:", config);
         
+        if (Object.keys(config).length === 0) {
+            console.log("[PATRULLAJE] Advertencia: El archivo canales.json está vacío o no se encontró.");
+        }
+
         for (const [guildId, channelId] of Object.entries(config)) {
             try {
                 const guild = client.guilds.cache.get(guildId);
-                if (!guild) continue;
+                if (!guild) {
+                    console.log(`[PATRULLAJE] No se encontró el servidor en caché con ID: ${guildId}`);
+                    continue;
+                }
 
                 const canal = await guild.channels.fetch(channelId);
                 if (canal) {
+                    console.log(`[PATRULLAJE] Enviando acción autónoma al canal ${canal.name} (${guild.name})...`);
                     const promptAccion = "Genera una acción corta y aleatoria en tercera persona (*como esta*) de lo que estás haciendo en este momento en el servidor (ej: patrullando los pasillos, limpiando tu arma, bebiendo vino, ajustando tus guantes o tu máscara). Sé breve, directo y mantén tu personalidad fría de ex-militar.";
                     
                     const accionGenerada = await consultarOpenRouter(promptAccion, `sistema-autonomo-${guildId}`);
                     if (accionGenerada) {
                         await canal.send(accionGenerada);
+                        console.log("[PATRULLAJE] ¡Mensaje enviado con éxito!");
                     }
+                } else {
+                    console.log(`[PATRULLAJE] No se pudo encontrar el canal con ID: ${channelId}`);
                 }
             } catch (err) {
                 console.error(`No se pudo enviar patrulla en el servidor ${guildId}:`, err);
@@ -112,27 +123,26 @@ function iniciarSistemaAutonomoMultiServidor() {
         setTimeout(ejecutarRondas, obtenerTiempoAleatorio());
     };
 
-    setTimeout(ejecutarRondas, obtenerTiempoAleatorio());
+    // Primera ejecución de prueba en 15 segundos tras arrancar
+    setTimeout(ejecutarRondas, 15000);
 }
 // -------------------------------------------------------------------------
 
-client.once('ready', async () => {
+client.once('ready', () => {
     console.log(`¡Bot conectado y listo como ${client.user.tag}! El sistema está estable.`);
 
-    // --- REGISTRO AUTOMÁTICO DE COMANDOS EN SEGUNDO PLANO (Seguro para Railway/Render) ---
-    try {
-        const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
-        console.log(`Iniciando el despliegue automático de ${commandsArray.length} comandos (/) en segundo plano...`);
-        
-        await rest.put(
-            Routes.applicationGuildCommands('1562899179964211200', '1560958563034341388'),
-            { body: commandsArray },
-        );
-        console.log('¡Comandos (/) registrados con éxito en el servidor de pruebas!');
-    } catch (error) {
-        console.error('Error al desplegar comandos automáticamente en Discord:', error);
-    }
-    // -------------------------------------------------------------------------------------
+    // --- EJECUTAR EL DEPLOY DE COMANDOS AUTOMÁTICAMENTE DESDE LA CONSOLA ---
+    exec('node deploy-commands.js', (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Error al ejecutar deploy-commands: ${error.message}`);
+            return;
+        }
+        if (stderr) {
+            console.error(`stderr: ${stderr}`);
+        }
+        console.log(`Salida del deploy:\n${stdout}`);
+    });
+    // ----------------------------------------------------------------------
 
     iniciarSistemaAutonomoMultiServidor();
 });
