@@ -1,4 +1,4 @@
-process.on('unhandledRejection', error => {
+Process.on('unhandledRejection', error => {
     console.error('Error no manejado en el sistema:', error);
 });
 
@@ -22,7 +22,7 @@ app.listen(PORT, () => {
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
 const { consultarOpenRouter } = require('./Services/openrouter');
 
 const client = new Client({
@@ -38,11 +38,14 @@ client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'Commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
+const commandsArray = []; // Arreglo auxiliar para registrar comandos en Discord automáticamente
+
 for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
     const command = require(filePath);
     if ('data' in command && 'execute' in command) {
         client.commands.set(command.data.name, command);
+        commandsArray.push(command.data.toJSON());
     }
 }
 
@@ -113,8 +116,24 @@ function iniciarSistemaAutonomoMultiServidor() {
 }
 // -------------------------------------------------------------------------
 
-client.once('ready', () => {
+client.once('ready', async () => {
     console.log(`¡Bot conectado y listo como ${client.user.tag}! El sistema está estable.`);
+
+    // --- REGISTRO AUTOMÁTICO DE COMANDOS EN SEGUNDO PLANO (Seguro para Railway/Render) ---
+    try {
+        const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
+        console.log(`Iniciando el despliegue automático de ${commandsArray.length} comandos (/) en segundo plano...`);
+        
+        await rest.put(
+            Routes.applicationGuildCommands('1562899179964211200', '1560958563034341388'),
+            { body: commandsArray },
+        );
+        console.log('¡Comandos (/) registrados con éxito en el servidor de pruebas!');
+    } catch (error) {
+        console.error('Error al desplegar comandos automáticamente en Discord:', error);
+    }
+    // -------------------------------------------------------------------------------------
+
     iniciarSistemaAutonomoMultiServidor();
 });
 
