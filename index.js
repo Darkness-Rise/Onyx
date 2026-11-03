@@ -1,4 +1,4 @@
-process.on('unhandledRejection', error => {
+Process.on('unhandledRejection', error => {
     console.error('Error no manejado en el sistema:', error);
 });
 
@@ -25,6 +25,7 @@ const path = require('node:path');
 const { exec } = require('node:child_process');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { consultarOpenRouter } = require('./Services/openrouter');
+const { conectarDB } = require('./Services/cloud'); // <-- Conexión modular de MongoDB
 
 const client = new Client({
     intents: [
@@ -128,8 +129,12 @@ function iniciarSistemaAutonomoMultiServidor() {
 }
 // -------------------------------------------------------------------------
 
-client.once('ready', () => {
+client.once('ready', async () => {
     console.log(`¡Bot conectado y listo como ${client.user.tag}! El sistema está estable.`);
+
+    // --- CONECTAR A MONGODB AL INICIAR ---
+    await conectarDB();
+    // ------------------------------------
 
     // --- EJECUTAR EL DEPLOY DE COMANDOS AUTOMÁTICAMENTE DESDE LA CONSOLA ---
     exec('node deploy-commands.js', (error, stdout, stderr) => {
