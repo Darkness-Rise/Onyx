@@ -1,4 +1,4 @@
-Process.on('unhandledRejection', error => {
+process.on('unhandledRejection', error => {
     console.error('Error no manejado en el sistema:', error);
 });
 
