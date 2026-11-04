@@ -72,10 +72,22 @@ async function limpiarPatrullasDB(guildId) {
     }
 }
 
+// --- Función para purgar todos los datos del servidor cuando el bot sea expulsado ---
+async function eliminarDatosServidor(guildId) {
+    try {
+        await PatrolConfig.deleteOne({ guildId });
+        await PatrolLogEntry.deleteMany({ guildId });
+        console.log(`[DB] Protocolo de limpieza ejecutado: Datos y registros purgados para el servidor ID: ${guildId}`);
+    } catch (error) {
+        console.error(`Error al purgar los datos del servidor ${guildId}:`, error);
+    }
+}
+
 module.exports = {
     obtenerConfigServidor,
     guardarConfigServidor,
     registrarPatrullaDB,
     escanearPatrullasDB,
-    limpiarPatrullasDB
+    limpiarPatrullasDB,
+    eliminarDatosServidor
 };
