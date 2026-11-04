@@ -4,7 +4,7 @@ const {
     guardarConfigServidor, 
     escanearPatrullasDB, 
     limpiarPatrullasDB 
-} = require('../Services/Mongodb/patrol_log');
+} = require('../Mongodb/patrol_log'); // Ruta corregida hacia la carpeta raíz Mongodb
 
 module.exports = {
     data: new SlashCommandBuilder()
