@@ -26,8 +26,8 @@ const { exec } = require('node:child_process');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { consultarOpenRouter } = require('./Services/openrouter');
 const { conectarDB } = require('./Services/cloud');
-// Ruta corregida según tu estructura actual de carpetas en GitHub
-const { obtenerConfigServidor, registrarPatrullaDB } = require('./Mongodb/patrol_log');
+// Importación apuntando al archivo que acabas de subir en Services/patrol_routine.js
+const { iniciarSistemaAutonomo } = require('./Services/patrol_routine');
 
 const client = new Client({
     intents: [
@@ -52,78 +52,6 @@ for (const file of commandFiles) {
 
 const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
 
-// --- SISTEMA DE ACCIONES AUTÓNOMAS Y PRESENCIA DINÁMICA MULTI-SERVIDOR (MONGODB) ---
-function iniciarSistemaAutonomoMultiServidor() {
-    const estadosDinamicos = [
-        { name: 'vigilando los accesos del cártel', type: 3 }, // Watching
-        { name: 'un buen vino tinto', type: 2 },                // Listening
-        { name: 'limpiando el cañón de su arma', type: 0 },     // Playing
-        { name: 'revisando el perímetro en silencio', type: 3 } // Watching
-    ];
-
-    const actualizarPresencia = () => {
-        const estadoAleatorio = estadosDinamicos[Math.floor(Math.random() * estadosDinamicos.length)];
-        client.user.setPresence({
-            activities: [estadoAleatorio],
-            status: 'dnd', // No molestar
-        });
-    };
-
-    actualizarPresencia();
-    setInterval(actualizarPresencia, 30 * 60 * 1000); // Rota el estado cada 30 min
-
-    const obtenerTiempoAleatorio = () => {
-        const minMinutos = 1;
-        const maxMinutos = 2;
-        return (Math.random() * (maxMinutos - minMinutos) + minMinutos) * 60 * 1000;
-    };
-
-    const ejecutarRondas = async () => {
-        // Recorremos todos los servidores en los que está el bot
-        for (const [guildId, guild] of client.guilds.cache) {
-            try {
-                // Obtenemos la configuración de canales desde MongoDB para este servidor
-                const configDoc = await obtenerConfigServidor(guildId);
-                const canalesMap = configDoc.canales; // Es un Map de Mongoose { channelId: contador }
-
-                if (!canalesMap || canalesMap.size === 0) {
-                    continue; // Si no hay canales configurados en este servidor, pasa al siguiente
-                }
-
-                for (const channelId of canalesMap.keys()) {
-                    try {
-                        const canal = await guild.channels.fetch(channelId);
-                        if (canal) {
-                            console.log(`[PATRULLAJE] Enviando acción autónoma al canal ${canal.name} (${guild.name})...`);
-                            const promptAccion = "Genera una acción corta y aleatoria en tercera persona (*como esta*) de lo que estás haciendo en este momento en el servidor (ej: patrullando los pasillos, limpiando tu arma, bebiendo vino, ajustando tus guantes o tu máscara). Sé breve, directo y mantén tu personalidad fría de ex-militar.";
-                            
-                            const accionGenerada = await consultarOpenRouter(promptAccion, `sistema-autonomo-${guildId}`);
-                            if (accionGenerada) {
-                                await canal.send(accionGenerada);
-                                // Guardar el registro y actualizar el contador directamente en MongoDB
-                                await registrarPatrullaDB(guildId, channelId, accionGenerada);
-                                console.log("[PATRULLAJE] ¡Mensaje enviado y registrado en MongoDB con éxito!");
-                            }
-                        } else {
-                            console.log(`[PATRULLAJE] No se pudo encontrar el canal con ID: ${channelId}`);
-                        }
-                    } catch (err) {
-                        console.error(`No se pudo enviar patrulla en el canal ${channelId} del servidor ${guildId}:`, err);
-                    }
-                }
-            } catch (err) {
-                console.error(`Error al procesar patrullaje para el servidor ${guildId}:`, err);
-            }
-        }
-
-        setTimeout(ejecutarRondas, obtenerTiempoAleatorio());
-    };
-
-    // Primera ejecución de prueba en 15 segundos tras arrancar
-    setTimeout(ejecutarRondas, 15000);
-}
-// -------------------------------------------------------------------------
-
 client.once('ready', async () => {
     console.log(`¡Bot conectado y listo como ${client.user.tag}! El sistema está estable.`);
 
@@ -144,7 +72,8 @@ client.once('ready', async () => {
     });
     // ----------------------------------------------------------------------
 
-    iniciarSistemaAutonomoMultiServidor();
+    // Iniciar el sistema autónomo modularizado
+    iniciarSistemaAutonomo(client);
 });
 
 client.on('interactionCreate', async interaction => {
