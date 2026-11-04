@@ -26,7 +26,8 @@ const { exec } = require('node:child_process');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { consultarOpenRouter } = require('./Services/openrouter');
 const { conectarDB } = require('./Services/cloud');
-const { obtenerConfigServidor, registrarPatrullaDB } = require('./Services/Mongodb/patrol_log');
+// Ruta corregida según tu estructura actual de carpetas en GitHub
+const { obtenerConfigServidor, registrarPatrullaDB } = require('./Mongodb/patrol_log');
 
 const client = new Client({
     intents: [
