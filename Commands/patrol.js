@@ -1,73 +1,52 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const fs = require('node:fs');
-const path = require('node:path');
-
-const rutaConfig = path.join(__dirname, '../Config/canales.json');
-
-// Función auxiliar para leer la config
-function leerConfig() {
-    if (!fs.existsSync(rutaConfig)) return {};
-    try {
-        return JSON.parse(fs.readFileSync(rutaConfig, 'utf8'));
-    } catch (e) {
-        return {};
-    }
-}
-
-// Función auxiliar para guardar la config
-function guardarConfig(data) {
-    fs.writeFileSync(rutaConfig, JSON.stringify(data, null, 2));
-}
+const { 
+    obtenerConfigServidor, 
+    guardarConfigServidor, 
+    escanearPatrullasDB, 
+    limpiarPatrullasDB 
+} = require('../Services/Mongodb/patrol_log');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('patrol')
-        .setDescription('Sistema de patrullaje autónomo de Onyx.')
+        .setDescription('Sistema de patrullaje autónomo de Onyx respaldado en MongoDB.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-        // Subcomando: SET (Añadir uno o más canales)
+        // Subcomando: SET
         .addSubcommand(subcommand =>
             subcommand
                 .setName('set')
                 .setDescription('Añade uno o varios canales a la ruta de patrullaje.')
-                .addChannelOption(option =>
-                    option.setName('canal_1')
-                        .setDescription('Primer canal de patrulla')
-                        .setRequired(true))
-                .addChannelOption(option =>
-                    option.setName('canal_2')
-                        .setDescription('Segundo canal opcional')
-                        .setRequired(false))
-                .addChannelOption(option =>
-                    option.setName('canal_3')
-                        .setDescription('Tercer canal opcional')
-                        .setRequired(false))
+                .addChannelOption(option => option.setName('canal_1').setDescription('Primer canal').setRequired(true))
+                .addChannelOption(option => option.setName('canal_2').setDescription('Segundo canal opcional').setRequired(false))
+                .addChannelOption(option => option.setName('canal_3').setDescription('Tercer canal opcional').setRequired(false))
         )
-        // Subcomando: UNSET (Quitar canales específicos)
+        // Subcomando: UNSET
         .addSubcommand(subcommand =>
             subcommand
                 .setName('unset')
                 .setDescription('Remueve un canal de la lista de patrullaje.')
-                .addChannelOption(option =>
-                    option.setName('canal')
-                        .setDescription('El canal que deseas retirar de las rondas')
-                        .setRequired(true))
+                .addChannelOption(option => option.setName('canal').setDescription('Canal a retirar').setRequired(true))
         )
-        // Subcomando: LOG (Ver canales activos y contadores)
+        // Subcomando: LOG (Muestra canales activos y últimas acciones)
         .addSubcommand(subcommand =>
             subcommand
                 .setName('log')
-                .setDescription('Muestra el estado actual y los registros de patrullaje.')
+                .setDescription('Muestra el estado actual y los últimos registros de patrulla en MongoDB.')
+        )
+        // Subcomando: CLEAN (Limpia los registros innecesarios)
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('clean')
+                .setDescription('Elimina el historial de patrullaje antiguo y resetea contadores.')
         ),
 
     async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true });
         const subcommand = interaction.options.getSubcommand();
         const guildId = interaction.guild.id;
-        let config = leerConfig();
-
-        // Asegurar la estructura para el servidor actual
-        if (!config[guildId]) {
-            config[guildId] = { canales: {} }; // Estructura: { idCanal: contadorPatrullajes }
-        }
+        
+        let configDoc = await obtenerConfigServidor(guildId);
+        let canalesMap = configDoc.canales; // Es un Map de Mongoose
 
         // --- SUBCOMANDO: SET ---
         if (subcommand === 'set') {
@@ -75,31 +54,29 @@ module.exports = {
                 interaction.options.getChannel('canal_1'),
                 interaction.options.getChannel('canal_2'),
                 interaction.options.getChannel('canal_3')
-            ].filter(Boolean); // Filtra los que no se hayan seleccionado
+            ].filter(Boolean);
 
             let agregados = [];
 
             for (const canal of canalesNuevos) {
-                if (canal.type !== 0) continue; // Solo canales de texto (GuildText = 0)
+                if (canal.type !== 0) continue; // Solo texto
 
-                if (!config[guildId].canales[canal.id]) {
-                    config[guildId].canales[canal.id] = 0; // Inicializa el contador en 0 si es nuevo
+                if (!canalesMap.has(canal.id)) {
+                    canalesMap.set(canal.id, 0);
                     agregados.push(`<#${canal.id}>`);
                 }
             }
 
-            guardarConfig(config);
+            await guardarConfigServidor(guildId, canalesMap);
 
             if (agregados.length === 0) {
-                return await interaction.reply({
-                    content: 'Los canales seleccionados ya estaban en la ruta de patrulla o no son canales de texto válidos.',
-                    ephemeral: true
+                return await interaction.editReply({
+                    content: 'Los canales seleccionados ya estaban en la ruta de patrulla o no son válidos.'
                 });
             }
 
-            await interaction.reply({
-                content: `*Ajusta sus guantes tácticos con firmeza.* Perímetro ampliado. Nuevos puntos añadidos a la ruta: ${agregados.join(', ')}.`,
-                ephemeral: false
+            await interaction.editReply({
+                content: `*Ajusta sus guantes tácticos con firmeza.* Perímetro ampliado en MongoDB. Nuevos puntos: ${agregados.join(', ')}.`
             });
         }
 
@@ -107,50 +84,60 @@ module.exports = {
         else if (subcommand === 'unset') {
             const canalAQuitar = interaction.options.getChannel('canal');
 
-            if (!config[guildId].canales[canalAQuitar.id]) {
-                return await interaction.reply({
-                    content: `Ese canal no se encuentra registrado en el sistema de patrullaje.`,
-                    ephemeral: true
+            if (!canalesMap.has(canalAQuitar.id)) {
+                return await interaction.editReply({
+                    content: `Ese canal no se encuentra registrado en el sistema de patrullaje.`
                 });
             }
 
-            delete config[guildId].canales[canalAQuitar.id];
-            guardarConfig(config);
+            canalesMap.delete(canalAQuitar.id);
+            await guardarConfigServidor(guildId, canalesMap);
 
-            await interaction.reply({
-                content: `*Retira la mirada del mapa táctico.* Canal <#${canalAQuitar.id}> removido de las rondas de vigilancia.`,
-                ephemeral: false
+            await interaction.editReply({
+                content: `*Retira la mirada del mapa táctico.* Canal <#${canalAQuitar.id}> removido de la base de datos.`
             });
         }
 
         // --- SUBCOMANDO: LOG ---
         else if (subcommand === 'log') {
-            const canalesMap = config[guildId].canales;
-            const listaCanalesIds = Object.keys(canalesMap);
-
-            if (listaCanalesIds.length === 0) {
-                return await interaction.reply({
-                    content: '*Cruza los brazos con seriedad.* No hay ningún canal asignado para patrullar actualmente en este servidor.',
-                    ephemeral: true
+            if (canalesMap.size === 0) {
+                return await interaction.editReply({
+                    content: '*Cruza los brazos con seriedad.* No hay ningún canal asignado para patrullar actualmente.'
                 });
             }
 
-            // Construimos un Embed ordenado con los datos y contadores
+            const ultimosLogs = await escanearPatrullasDB(guildId, 5); // Últimas 5 acciones
+
             const embed = new EmbedBuilder()
-                .setTitle('🛡️ Registro de Patrullaje Táctico')
+                .setTitle('🛡️ Registro de Patrullaje Táctico (MongoDB)')
                 .setColor('#2b2d31')
-                .setDescription('Estado actual de los perímetros bajo vigilancia de Onyx:')
+                .setDescription('Estado actual y actividad reciente del cártel:')
                 .setTimestamp();
 
-            let descripcionCampos = '';
-            for (const canalId of listaCanalesIds) {
-                const contador = canalesMap[canalId];
-                descripcionCampos += `• <#${canalId}> — **${contador}** patrullajes realizados\n`;
+            let descripcionCanales = '';
+            for (const [canalId, contador] of canalesMap.entries()) {
+                descripcionCanales += `• <#${canalId}> — **${contador}** patrullajes realizados\n`;
+            }
+            embed.addFields({ name: 'Canales Activos', value: descripcionCanales });
+
+            if (ultimosLogs.length > 0) {
+                let textoLogs = '';
+                for (const log of ultimosLogs) {
+                    const hora = new Date(log.timestamp).toLocaleTimeString();
+                    textoLogs += `\`[${hora}] <#${log.channelId}>\`: ${log.actionText}\n`;
+                }
+                embed.addFields({ name: 'Ultimas Acciones Registradas', value: textoLogs });
             }
 
-            embed.addFields({ name: 'Canales Activos', value: descripcionCampos });
+            await interaction.editReply({ embeds: [embed] });
+        }
 
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+        // --- SUBCOMANDO: CLEAN ---
+        else if (subcommand === 'clean') {
+            const borrados = await limpiarPatrullasDB(guildId);
+            await interaction.editReply({
+                content: `*Limpia el historial del servidor.* Se han purgado **${borrados}** registros antiguos de la base de datos y reseteado los contadores.`
+            });
         }
     },
 };
