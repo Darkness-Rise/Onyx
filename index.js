@@ -6,6 +6,16 @@ process.on('uncaughtException', error => {
     console.error('Excepción no capturada:', error);
 });
 
+// --- VALIDACIÓN DE ENTORNO (Nivel industrial) ---
+const variablesRequeridas = ['DISCORD_BOT_TOKEN', 'MONGODB_URI', 'OPENROUTER_API_KEY'];
+const faltantes = variablesRequeridas.filter(v => !process.env[v]);
+
+if (faltantes.length > 0) {
+    console.error(`❌ [ERROR CRÍTICO] Faltan las siguientes variables de entorno obligatorias: ${faltantes.join(', ')}`);
+    process.exit(1);
+}
+// -----------------------------------------------
+
 // --- Servidor web integrado para cumplir con los requisitos de Render / Railway ---
 const express = require('express');
 const app = express();
@@ -93,11 +103,17 @@ client.on('interactionCreate', async interaction => {
     try {
         await command.execute(interaction);
     } catch (error) {
-        console.error(error);
+        console.error(`[ERROR] Falló la ejecución del comando /${interaction.commandName}:`, error);
+        
+        const respuestaError = { 
+            content: '*Cruza los brazos con molestia.* Hubo una interferencia táctica al procesar esta orden. Reintente.', 
+            ephemeral: true 
+        };
+
         if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ content: 'Hubo un error al ejecutar este comando.', ephemeral: true });
+            await interaction.followUp(respuestaError).catch(() => {});
         } else {
-            await interaction.reply({ content: 'Hubo un error al ejecutar este comando.', ephemeral: true });
+            await interaction.reply(respuestaError).catch(() => {});
         }
     }
 });
