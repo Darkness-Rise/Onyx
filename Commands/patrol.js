@@ -23,11 +23,11 @@ module.exports = {
                 .setName('unset')
                 .setDescription('Abre un panel interactivo para remover canales de la ruta.')
         )
-        // Subcomando: LOG (Muestra canales activos y últimas acciones)
+        // Subcomando: LOG (Muestra el estado y métricas de contadores por canal)
         .addSubcommand(subcommand =>
             subcommand
                 .setName('log')
-                .setDescription('Muestra el estado actual y los últimos registros de patrulla en MongoDB.')
+                .setDescription('Muestra el estado actual y las métricas de patrullaje en MongoDB.')
         )
         // Subcomando: CLEAN (Limpia los registros innecesarios)
         .addSubcommand(subcommand =>
@@ -223,7 +223,7 @@ module.exports = {
             }
         }
 
-        // --- SUBCOMANDO: LOG ---
+        // --- SUBCOMANDO: LOG (Métrica y contadores por canal) ---
         else if (subcommand === 'log') {
             await interaction.deferReply({ ephemeral: true });
 
@@ -233,28 +233,24 @@ module.exports = {
                 });
             }
 
-            const ultimosLogs = await escanearPatrullasDB(guildId, 5);
-
             const embed = new EmbedBuilder()
-                .setTitle('🛡️ Registro de Patrullaje Táctico (MongoDB)')
+                .setTitle('🛡️ Métrica de Actividad y Patrullaje (MongoDB)')
                 .setColor('#2b2d31')
-                .setDescription('Estado actual y actividad reciente del cártel:')
+                .setDescription('Estado y conteo de acciones registradas por canal:')
                 .setTimestamp();
 
             let descripcionCanales = '';
-            for (const [canalId, contador] of canalesMap.entries()) {
-                descripcionCanales += `• <#${canalId}> — **${contador}** patrullajes realizados\n`;
-            }
-            embed.addFields({ name: 'Canales Activos', value: descripcionCanales });
+            let totalAccionesGlobal = 0;
 
-            if (ultimosLogs.length > 0) {
-                let textoLogs = '';
-                for (const log of ultimosLogs) {
-                    const hora = new Date(log.timestamp).toLocaleTimeString();
-                    textoLogs += `\`[${hora}] <#${log.channelId}>\`: ${log.actionText}\n`;
-                }
-                embed.addFields({ name: 'Ultimas Acciones Registradas', value: textoLogs });
+            for (const [canalId, contador] of canalesMap.entries()) {
+                descripcionCanales += `• <#${canalId}> — **${contador}** acciones / mensajes registrados\n`;
+                totalAccionesGlobal += contador;
             }
+
+            embed.addFields(
+                { name: '📊 Canales en Vigilancia', value: descripcionCanales },
+                { name: '⚡ Total de Operaciones', value: `Se han contabilizado **${totalAccionesGlobal}** acciones en total en este servidor.` }
+            );
 
             await interaction.editReply({ embeds: [embed] });
         }
