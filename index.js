@@ -25,11 +25,10 @@ const path = require('node:path');
 const { exec } = require('node:child_process');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { consultarOpenRouter } = require('./Services/openrouter');
-const { conectarDB } = require('./Services/cloud');
+// Importación actualizada para conectar y usar la purga global desde cloud.js
+const { conectarDB, purgaGlobalServidor } = require('./Services/cloud');
 // Importación del sistema autónomo modularizado
 const { iniciarSistemaAutonomo } = require('./Services/patrol_routine');
-// Importación de la función de purga de datos por servidor
-const { eliminarDatosServidor } = require('./Mongodb/patrol_log');
 
 const client = new Client({
     intents: [
@@ -78,10 +77,10 @@ client.once('ready', async () => {
     iniciarSistemaAutonomo(client);
 });
 
-// --- EVENTO: Limpieza automática de datos cuando el bot deja un servidor ---
+// --- EVENTO: Barrido y purga global automática cuando el bot deja un servidor ---
 client.on('guildDelete', async guild => {
     console.log(`[SISTEMA] Onyx fue expulsado o abandonado del servidor: ${guild.name} (${guild.id})`);
-    await eliminarDatosServidor(guild.id);
+    await purgaGlobalServidor(guild.id);
 });
 // -------------------------------------------------------------------------
 
