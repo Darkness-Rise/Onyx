@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const patrolConfigSchema = new mongoose.Schema({
     guildId: { type: String, required: true, unique: true },
-    canales: { type: Map, of: Number, default: {} } // { channelId: contador }
+    canales: { type: Map, of: Number, default: {} }
 });
 
 const patrolLogEntrySchema = new mongoose.Schema({
@@ -15,7 +15,6 @@ const patrolLogEntrySchema = new mongoose.Schema({
 const PatrolConfig = mongoose.model('PatrolConfig', patrolConfigSchema);
 const PatrolLogEntry = mongoose.model('PatrolLogEntry', patrolLogEntrySchema);
 
-// --- Funciones de Configuración de Canales ---
 async function obtenerConfigServidor(guildId) {
     let config = await PatrolConfig.findOne({ guildId });
     if (!config) {
@@ -33,13 +32,11 @@ async function guardarConfigServidor(guildId, canalesMap) {
     );
 }
 
-// --- Funciones de Historial (Logs de Patrulla) ---
 async function registrarPatrullaDB(guildId, channelId, actionText) {
     try {
         const nuevaPatrulla = new PatrolLogEntry({ guildId, channelId, actionText });
         await nuevaPatrulla.save();
         
-        // Incrementar el contador en la config del servidor
         const config = await obtenerConfigServidor(guildId);
         const actual = config.canales.get(channelId) || 0;
         config.canales.set(channelId, actual + 1);
@@ -63,7 +60,6 @@ async function escanearPatrullasDB(guildId, limite = 10) {
 async function limpiarPatrullasDB(guildId) {
     try {
         const resultado = await PatrolLogEntry.deleteMany({ guildId });
-        // Opcional: resetear contadores en la config si deseas
         const config = await obtenerConfigServidor(guildId);
         for (const channelId of config.canales.keys()) {
             config.canales.set(channelId, 0);
