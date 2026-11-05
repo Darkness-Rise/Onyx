@@ -39,6 +39,8 @@ const { consultarOpenRouter } = require('./Services/openrouter');
 const { conectarDB, purgaGlobalServidor } = require('./Services/cloud');
 // Importación del sistema autónomo modularizado
 const { iniciarSistemaAutonomo } = require('./Services/patrol_routine');
+// Importación del sistema de impuestos (Cuota de protección semanal)
+const { cobrarImpuestosServidor } = require('./Mongodb/economy');
 
 const client = new Client({
     intents: [
@@ -85,6 +87,22 @@ client.once('ready', async () => {
 
     // Iniciar el sistema autónomo modularizado
     iniciarSistemaAutonomo(client);
+
+    // --- TAREA PERIÓDICA: COBRO DE CUOTA DE PROTECCIÓN (2% semanal) ---
+    // Se ejecuta cada 24 horas para revisar qué cuentas cumplen el ciclo de 7 días
+    setInterval(async () => {
+        try {
+            for (const [guildId, guild] of client.guilds.cache) {
+                const totalRecaudado = await cobrarImpuestosServidor(guildId);
+                if (totalRecaudado > 0) {
+                    console.log(`[IMPUESTOS] La organización cobró la cuota de protección en ${guild.name}: ${totalRecaudado.toLocaleString()} € recaudados.`);
+                }
+            }
+        } catch (err) {
+            console.error('Error aplicando la cuota de protección automática:', err);
+        }
+    }, 24 * 60 * 60 * 1000); // 24 horas
+    // -----------------------------------------------------------------
 });
 
 // --- EVENTO: Barrido y purga global automática cuando el bot deja un servidor ---
