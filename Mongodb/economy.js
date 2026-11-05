@@ -8,7 +8,7 @@ const economySchema = new mongoose.Schema({
     },
     guildId: { 
         type: String, 
-        required: true // Vital para que tu función de purga global lo detecte y limpie si hace falta
+        required: true // Clave para que tu función de purga global lo detecte y limpie si hace falta
     },
     dinero: { 
         type: Number, 
