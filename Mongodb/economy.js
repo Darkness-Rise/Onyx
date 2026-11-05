@@ -9,12 +9,13 @@ const economySchema = new mongoose.Schema({
 
 economySchema.index({ userId: 1, guildId: 1 }, { unique: true });
 
-// Esquema para los objetos del Mercado Negro (Tienda)
+// Esquema para los objetos del Mercado Negro (Tienda) con control de stock
 const itemTiendaSchema = new mongoose.Schema({
     guildId: { type: String, required: true, index: true },
     nombre: { type: String, required: true },
     descripcion: { type: String, required: true },
     precio: { type: Number, required: true, min: 1 },
+    stock: { type: Number, required: true, default: 1, min: 0 }, // Cantidad disponible en stock
     roleId: { type: String, default: null } // Opcional: ID del rol de Discord que otorga al comprarlo
 });
 
