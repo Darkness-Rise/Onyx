@@ -4,31 +4,36 @@ const mongoose = require('mongoose');
 const economySchema = new mongoose.Schema({
     userId: { 
         type: String, 
-        required: true 
+        required: true,
+        index: true // Indexado para búsquedas ultra rápidas por usuario
     },
     guildId: { 
         type: String, 
-        required: true // Clave para que tu función de purga global lo detecte y limpie si hace falta
+        required: true,
+        index: true // Indexado para que la purga y filtros por servidor vuelen
     },
     dinero: { 
         type: Number, 
-        default: 100 // Bono inicial de 100 €
+        default: 100, // Bono inicial de 100 €
+        min: 0        // Seguridad: El dinero jamás puede bajar de 0 por error lógico
     }
 });
 
-// Índice compuesto: un usuario solo tiene un registro de dinero por servidor
+// Índice compuesto único: un usuario solo tiene un registro por servidor
 economySchema.index({ userId: 1, guildId: 1 }, { unique: true });
 
 const Economy = mongoose.model('Economy', economySchema);
 
 /**
- * Obtiene o crea el balance del usuario en un servidor específico.
+ * Obtiene o crea el balance del usuario en un servidor específico de forma atómica.
+ * Usa upsert para evitar condiciones de carrera si hay peticiones simultáneas.
  */
 async function obtenerBalance(userId, guildId) {
-    let cuenta = await Economy.findOne({ userId, guildId });
-    if (!cuenta) {
-        cuenta = await Economy.create({ userId, guildId, dinero: 100 });
-    }
+    let cuenta = await Economy.findOneAndUpdate(
+        { userId, guildId },
+        { $setOnInsert: { dinero: 100 } }, // Si se crea nuevo, arranca con 100 €
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
     return cuenta;
 }
 
