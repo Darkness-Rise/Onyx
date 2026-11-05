@@ -6,7 +6,7 @@ module.exports = {
         .setName('botin')
         .setDescription('Gestión de fondos y capital negro en Fallen Ash Realm (FAR).')
         
-        // Subcomando: SALDO (Antes pestaña)
+        // Subcomando: SALDO
         .addSubcommand(subcommand =>
             subcommand
                 .setName('saldo')
@@ -18,7 +18,7 @@ module.exports = {
                 )
         )
 
-        // Subcomando: TRANSFER (Nuevo - Para usuarios)
+        // Subcomando: TRANSFER
         .addSubcommand(subcommand =>
             subcommand
                 .setName('transfer')
@@ -35,7 +35,7 @@ module.exports = {
                 )
         )
         
-        // Subcomando: DEBITAR (Antes inyectar - Admin)
+        // Subcomando: DEBITAR (Admin)
         .addSubcommand(subcommand =>
             subcommand
                 .setName('debitar')
@@ -52,7 +52,7 @@ module.exports = {
                 )
         )
         
-        // Subcomando: COBRAR (Admin)
+        // Subcomando: COBRAR (Admin con Autocompletado de saldo)
         .addSubcommand(subcommand =>
             subcommand
                 .setName('cobrar')
@@ -66,8 +66,37 @@ module.exports = {
                     option.setName('cantidad')
                         .setDescription('Cantidad en Euros (€) a restar')
                         .setRequired(true)
+                        .setAutocomplete(true) // 👈 Activamos el autocompletado aquí
                 )
         ),
+
+    // --- MANEJADOR DE AUTOCOMPLETADO ---
+    async autocomplete(interaction) {
+        const subcommand = interaction.options.getSubcommand();
+        
+        if (subcommand === 'cobrar') {
+            const guildId = interaction.guild.id;
+            const targetUser = interaction.options.getUser('cliente');
+
+            // Si el admin aún no ha elegido a un cliente, no mostramos sugerencias de saldo
+            if (!targetUser) {
+                return await interaction.respond([
+                    { name: '⚠️ Primero selecciona un cliente arriba para ver su saldo disponible', value: 0 }
+                ]);
+            }
+
+            // Obtenemos el balance real del usuario seleccionado en este servidor
+            const cuenta = await obtenerBalance(targetUser.id, guildId);
+            const saldoDisponible = cuenta.dinero;
+
+            // Devolvemos sugerencias útiles para el administrador
+            return await interaction.respond([
+                { name: `💰 Saldo disponible del gángster: ${saldoDisponible.toLocaleString()} €`, value: saldoDisponible },
+                ...(saldoDisponible >= 50 ? [{ name: `🚬 Cobrar una cuota estándar (50 €)`, value: 50 }] : []),
+                ...(saldoDisponible >= 100 ? [{ name: `💼 Cobrar una cuota pesada (100 €)`, value: 100 }] : [])
+            ]);
+        }
+    },
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
@@ -82,7 +111,7 @@ module.exports = {
         }
 
         try {
-            // --- SALDO (Status) ---
+            // --- SALDO ---
             if (subcommand === 'saldo') {
                 await interaction.deferReply({ ephemeral: true });
                 const targetUser = interaction.options.getUser('cliente') || interaction.user;
@@ -105,7 +134,7 @@ module.exports = {
                 return await interaction.editReply({ embeds: [embed] });
             }
 
-            // --- TRANSFER (Envío entre usuarios) ---
+            // --- TRANSFER ---
             else if (subcommand === 'transfer') {
                 await interaction.deferReply({ ephemeral: true });
                 const emisorUser = interaction.user;
@@ -124,7 +153,6 @@ module.exports = {
                     return await interaction.editReply({ content: '⚠️ La cantidad a transferir debe ser mayor a cero.' });
                 }
 
-                // Obtenemos cuentas de ambos
                 const cuentaEmisor = await obtenerBalance(emisorUser.id, guildId);
 
                 if (cuentaEmisor.dinero < cantidad) {
@@ -135,7 +163,6 @@ module.exports = {
 
                 const cuentaReceptor = await obtenerBalance(receptorUser.id, guildId);
 
-                // Realizamos la transferencia de forma atómica/segura
                 cuentaEmisor.dinero -= cantidad;
                 cuentaReceptor.dinero += cantidad;
 
@@ -147,7 +174,7 @@ module.exports = {
                 });
             }
 
-            // --- DEBITAR (Add - Admin) ---
+            // --- DEBITAR (Admin) ---
             else if (subcommand === 'debitar') {
                 await interaction.deferReply({ ephemeral: true });
                 const targetUser = interaction.options.getUser('cliente');
@@ -170,7 +197,7 @@ module.exports = {
                 });
             }
 
-            // --- COBRAR (Remove - Admin) ---
+            // --- COBRAR (Admin) ---
             else if (subcommand === 'cobrar') {
                 await interaction.deferReply({ ephemeral: true });
                 const targetUser = interaction.options.getUser('cliente');
