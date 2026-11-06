@@ -13,7 +13,7 @@ const { ItemTienda, obtenerBalance } = require('../Mongodb/economy');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('tienda')
-        .setDescription('El mercado negro y contrabando del distrito en Fallen Ash Realm.')
+        .setDescription('El mercado negro y contrabando del distrito.')
         
         // --- SUBCOMANDO 1: VER (Paginado + Menú interactivo de compra) ---
         .addSubcommand(subcommand =>
@@ -52,16 +52,53 @@ module.exports = {
                         .setDescription('Rol de Discord que entrega automáticamente al adquirirlo (opcional)')
                         .setRequired(false)
                 )
+        )
+
+        // --- SUBCOMANDO 3: QUITAR (ADMIN con Autocompletado) ---
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('quitar')
+                .setDescription('[ADMIN] Retira un objeto del catálogo de la tienda.')
+                .addStringOption(option =>
+                    option.setName('articulo')
+                        .setDescription('Selecciona el artículo a retirar')
+                        .setRequired(true)
+                        .setAutocomplete(true) // Activamos el autocompletado en tiempo real
+                )
         ),
+
+    // Manejador del Autocompletado para el subcomando "quitar"
+    async autocomplete(interaction) {
+        const focusedValue = interaction.options.getFocused();
+        const guildId = interaction.guild.id;
+
+        try {
+            const items = await ItemTienda.find({ guildId });
+            // Filtramos los elementos que coincidan con lo que el admin está escribiendo
+            const filtered = items.filter(item => item.nombre.toLowerCase().includes(focusedValue.toLowerCase()));
+            
+            // Discord solo permite máximo 25 opciones en los resultados de autocompletado
+            await interaction.respond(
+                filtered.slice(0, 25).map(item => ({
+                    name: `${item.nombre} (Stock: ${item.stock} | ${item.precio} €)`,
+                    value: item._id.toString()
+                }))
+            );
+        } catch (error) {
+            console.error('Error en el autocompletado de la tienda:', error);
+            await interaction.respond([]);
+        }
+    },
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const guildId = interaction.guild.id;
+        const guildName = interaction.guild.name;
 
-        // --- SEGURIDAD PARA AGREGAR ---
-        if (subcommand === 'agregar' && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        // --- SEGURIDAD PARA ADMINS (AGREGAR Y QUITAR) ---
+        if ((subcommand === 'agregar' || subcommand === 'quitar') && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return await interaction.reply({
-                content: '*Te bloquea el paso con el brazo.* Solo los capos de la organización deciden qué entra al mostrador.',
+                content: '*Te bloquea el paso con el brazo.* Solo los capos de la organización deciden el inventario del mostrador.',
                 ephemeral: true
             });
         }
@@ -73,8 +110,7 @@ module.exports = {
             if (subcommand === 'ver') {
                 await interaction.deferReply();
 
-                // Obtenemos solo los objetos con stock disponible
-                const items = await ItemTienda.find({ guildId, stock: { $gt: 0 } });
+                let items = await ItemTienda.find({ guildId, stock: { $gt: 0 } });
 
                 if (items.length === 0) {
                     return await interaction.editReply({
@@ -82,20 +118,20 @@ module.exports = {
                     });
                 }
 
-                const porPagina = 5; // Máximo 5 elementos por página (límite recomendado para menús desplegables de Discord de 25 opciones, dejando margen)
-                const totalPaginas = Math.ceil(items.length / porPagina);
+                const porPagina = 5; 
+                let totalPaginas = Math.ceil(items.length / porPagina);
                 let paginaActual = 0;
 
-                // Función para construir el Embed de la página actual
-                const generarEmbedTienda = (pagina) => {
+                const generarEmbedTienda = (pagina, listaItems) => {
                     const inicio = pagina * porPagina;
                     const fin = inicio + porPagina;
-                    const itemsPagina = items.slice(inicio, fin);
+                    const itemsPagina = listaItems.slice(inicio, fin);
+                    const currentTotalPaginas = Math.ceil(listaItems.length / porPagina) || 1;
 
                     const embed = new EmbedBuilder()
-                        .setTitle('🛒 Mercado Negro — Contrabando FAR')
+                        .setTitle(`🛒 Mercado Negro — Contrabando ${guildName}`)
                         .setColor('#2b2b2b')
-                        .setDescription(`Selecciona un artículo en el menú de abajo para adquirirlo al instante.\n*Página ${pagina + 1} de ${totalPaginas}*`)
+                        .setDescription(`Selecciona un artículo en el menú de abajo para adquirirlo al instante.\n*Página ${pagina + 1} de ${currentTotalPaginas}*`)
                         .setTimestamp();
 
                     itemsPagina.forEach((item, index) => {
@@ -110,14 +146,13 @@ module.exports = {
                     return embed;
                 };
 
-                // Función para construir el menú desplegable de selección de compra de la página actual
-                const generarMenuSeleccion = (pagina) => {
+                const generarMenuSeleccion = (pagina, listaItems) => {
                     const inicio = pagina * porPagina;
-                    const itemsPagina = items.slice(inicio, inicio + porPagina);
+                    const itemsPagina = listaItems.slice(inicio, inicio + porPagina);
 
                     const opciones = itemsPagina.map(item => 
                         new StringSelectMenuOptionBuilder()
-                            .setLabel(item.nombre.substring(0, 100)) // Discord exige máximo 100 caracteres en el label
+                            .setLabel(item.nombre.substring(0, 100))
                             .setDescription(`Precio: ${item.precio.toLocaleString()} € | Stock: ${item.stock}`)
                             .setValue(item._id.toString())
                     );
@@ -130,8 +165,8 @@ module.exports = {
                     );
                 };
 
-                // Función para construir los botones de navegación (páginas)
-                const generarBotonesNavegacion = (pagina) => {
+                const generarBotonesNavegacion = (pagina, listaItems) => {
+                    const currentTotalPaginas = Math.ceil(listaItems.length / porPagina);
                     return new ActionRowBuilder().addComponents(
                         new ButtonBuilder()
                             .setCustomId('tienda_prev')
@@ -142,46 +177,41 @@ module.exports = {
                             .setCustomId('tienda_next')
                             .setEmoji('▶️')
                             .setStyle(ButtonStyle.Secondary)
-                            .setDisabled(pagina === totalPaginas - 1)
+                            .setDisabled(pagina >= currentTotalPaginas - 1)
                     );
                 };
 
-                // Componentes iniciales
-                const components = [generarMenuSeleccion(paginaActual)];
-                if (totalPaginas > 1) {
-                    components.push(generarBotonesNavegacion(paginaActual));
-                }
+                const construirComponentes = (pagina, listaItems) => {
+                    const currentTotalPaginas = Math.ceil(listaItems.length / porPagina);
+                    const comps = [generarMenuSeleccion(pagina, listaItems)];
+                    if (currentTotalPaginas > 1) {
+                        comps.push(generarBotonesNavegacion(pagina, listaItems));
+                    }
+                    return comps;
+                };
 
                 const mensaje = await interaction.editReply({
-                    embeds: [generarEmbedTienda(paginaActual)],
-                    components: components
+                    embeds: [generarEmbedTienda(paginaActual, items)],
+                    components: construirComponentes(paginaActual, items)
                 });
 
-                // Colector de interacciones para botones y menú (expira en 2 minutos)
                 const collector = mensaje.createMessageComponentCollector({ time: 120000 });
 
                 collector.on('collect', async i => {
-                    // --- CASO 1: CAMBIO DE PÁGINA (BOTONES) ---
                     if (i.isButton()) {
                         if (i.user.id !== interaction.user.id) {
                             return await i.reply({ content: '⚠️ No metas las manos en el mostrador ajeno.', ephemeral: true });
                         }
 
+                        totalPaginas = Math.ceil(items.length / porPagina);
                         if (i.customId === 'tienda_prev' && paginaActual > 0) paginaActual--;
                         else if (i.customId === 'tienda_next' && paginaActual < totalPaginas - 1) paginaActual++;
 
-                        const newComponents = [generarMenuSeleccion(paginaActual)];
-                        if (totalPaginas > 1) {
-                            newComponents.push(generarBotonesNavegacion(paginaActual));
-                        }
-
                         await i.update({
-                            embeds: [generarEmbedTienda(paginaActual)],
-                            components: newComponents
+                            embeds: [generarEmbedTienda(paginaActual, items)],
+                            components: construirComponentes(paginaActual, items)
                         });
                     }
-
-                    // --- CASO 2: COMPRA DE ARTÍCULO (MENÚ DESPLEGABLE) ---
                     else if (i.isStringSelectMenu()) {
                         if (i.customId === 'comprar_select_item') {
                             await i.deferReply({ ephemeral: true });
@@ -189,14 +219,12 @@ module.exports = {
                             const itemId = i.values[0];
                             const userId = i.user.id;
 
-                            // Buscamos el objeto fresco en la base de datos
                             const item = await ItemTienda.findById(itemId);
 
                             if (!item || item.stock <= 0) {
                                 return await i.editReply({ content: '⚠️ Lo siento, este artículo ya se agotó o fue retirado del mostrador.' });
                             }
 
-                            // Verificamos saldo del comprador
                             const cuentaUsuario = await obtenerBalance(userId, guildId);
 
                             if (cuentaUsuario.dinero < item.precio) {
@@ -205,11 +233,9 @@ module.exports = {
                                 });
                             }
 
-                            // Descontamos Euros y guardamos
                             cuentaUsuario.dinero -= item.precio;
                             await cuentaUsuario.save();
 
-                            // Reducimos el stock (1 unidad)
                             item.stock -= 1;
                             if (item.stock <= 0) {
                                 await ItemTienda.deleteOne({ _id: item._id });
@@ -217,7 +243,6 @@ module.exports = {
                                 await item.save();
                             }
 
-                            // Otorgar rol de Discord si está vinculado
                             let mensajeRol = '';
                             if (item.roleId) {
                                 try {
@@ -232,21 +257,21 @@ module.exports = {
                                 }
                             }
 
-                            // Actualizamos el mensaje principal de la tienda para reflejar el nuevo stock en tiempo real
-                            const itemsActualizados = await ItemTienda.find({ guildId, stock: { $gt: 0 } });
-                            if (itemsActualizados.length === 0) {
+                            items = await ItemTienda.find({ guildId, stock: { $gt: 0 } });
+                            totalPaginas = Math.ceil(items.length / porPagina);
+
+                            if (items.length === 0) {
                                 await mensaje.edit({
                                     content: '*El mostrador se ha quedado completamente vacío.* No queda más contrabando.',
                                     embeds: [],
                                     components: []
                                 }).catch(() => {});
                             } else {
-                                // Ajustamos la página si nos pasamos del límite tras la compra
-                                const nuevoTotalPaginas = Math.ceil(itemsActualizados.length / porPagina);
-                                if (paginaActual >= nuevoTotalPaginas) paginaActual = nuevoTotalPaginas - 1;
-
-                                // Refrescamos la vista de la tienda principal
-                                // (Nota: Para simplificar la recarga global del embed aquí, actualizamos con los datos nuevos)
+                                if (paginaActual >= totalPaginas) paginaActual = Math.max(0, totalPaginas - 1);
+                                await mensaje.edit({
+                                    embeds: [generarEmbedTienda(paginaActual, items)],
+                                    components: construirComponentes(paginaActual, items)
+                                }).catch(() => {});
                             }
 
                             return await i.editReply({
@@ -288,6 +313,24 @@ module.exports = {
 
                 await interaction.editReply({
                     content: `*Sella un nuevo contrato en el libro negro.* Se ha añadido **${nombre}** (\`${cantidad} unidades\` en stock) por **${precio.toLocaleString()} €** c/u al catálogo del bar.`
+                });
+            }
+
+            // ==========================================
+            // --- SUBCOMANDO: QUITAR (ADMIN) ---
+            // ==========================================
+            else if (subcommand === 'quitar') {
+                await interaction.deferReply({ ephemeral: true });
+
+                const itemId = interaction.options.getString('articulo');
+                const itemRemovido = await ItemTienda.findByIdAndDelete(itemId);
+
+                if (!itemRemovido || itemRemovido.guildId !== guildId) {
+                    return await interaction.editReply({ content: '⚠️ No se encontró ese artículo en el inventario del servidor o ya fue eliminado.' });
+                }
+
+                await interaction.editReply({
+                    content: `*Tacha furiosamente la línea en el registro.* El artículo **${itemRemovido.nombre}** ha sido retirado permanentemente del mostrador.`
                 });
             }
 
