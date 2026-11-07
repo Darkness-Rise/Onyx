@@ -9,20 +9,21 @@ const {
     StringSelectMenuOptionBuilder 
 } = require('discord.js');
 const { ItemTienda, obtenerBalance } = require('../Mongodb/economy');
+const ConfigServidor = require('../Mongodb/config'); // <--- Importamos la config para validar roles de moderador
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('tienda')
         .setDescription('El mercado negro y contrabando del distrito.')
         
-        // --- SUBCOMANDO 1: VER (Paginado + Menú interactivo de compra) ---
+        // --- SUBCOMANDO 1: VER (Público: Paginado + Menú interactivo de compra) ---
         .addSubcommand(subcommand =>
             subcommand
                 .setName('ver')
                 .setDescription('Muestra el catálogo interactivo de contrabando y permite comprar al instante.')
         )
 
-        // --- SUBCOMANDO 2: AGREGAR (Minimalista para Admins) ---
+        // --- SUBCOMANDO 2: AGREGAR (Admin/Mod) ---
         .addSubcommand(subcommand =>
             subcommand
                 .setName('agregar')
@@ -54,7 +55,7 @@ module.exports = {
                 )
         )
 
-        // --- SUBCOMANDO 3: QUITAR (ADMIN con Autocompletado) ---
+        // --- SUBCOMANDO 3: QUITAR (Admin/Mod con Autocompletado) ---
         .addSubcommand(subcommand =>
             subcommand
                 .setName('quitar')
@@ -63,21 +64,22 @@ module.exports = {
                     option.setName('articulo')
                         .setDescription('Selecciona el artículo a retirar')
                         .setRequired(true)
-                        .setAutocomplete(true) // Activamos el autocompletado en tiempo real
+                        .setAutocomplete(true)
                 )
         ),
 
     // Manejador del Autocompletado para el subcomando "quitar"
     async autocomplete(interaction) {
+        const subcommand = interaction.options.getSubcommand();
+        if (subcommand !== 'quitar') return;
+
         const focusedValue = interaction.options.getFocused();
         const guildId = interaction.guild.id;
 
         try {
             const items = await ItemTienda.find({ guildId });
-            // Filtramos los elementos que coincidan con lo que el admin está escribiendo
             const filtered = items.filter(item => item.nombre.toLowerCase().includes(focusedValue.toLowerCase()));
             
-            // Discord solo permite máximo 25 opciones en los resultados de autocompletado
             await interaction.respond(
                 filtered.slice(0, 25).map(item => ({
                     name: `${item.nombre} (Stock: ${item.stock} | ${item.precio} €)`,
@@ -94,13 +96,20 @@ module.exports = {
         const subcommand = interaction.options.getSubcommand();
         const guildId = interaction.guild.id;
         const guildName = interaction.guild.name;
+        const member = interaction.member;
 
-        // --- SEGURIDAD PARA ADMINS (AGREGAR Y QUITAR) ---
-        if ((subcommand === 'agregar' || subcommand === 'quitar') && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return await interaction.reply({
-                content: '*Te bloquea el paso con el brazo.* Solo los capos de la organización deciden el inventario del mostrador.',
-                ephemeral: true
-            });
+        // --- VALIDACIÓN DE SEGURIDAD EXCLUSIVA PARA AGREGAR Y QUITAR ---
+        if (subcommand === 'agregar' || subcommand === 'quitar') {
+            const esAdminDiscord = member.permissions.has(PermissionFlagsBits.Administrator);
+            const config = await ConfigServidor.findOne({ guildId });
+            const tieneRolMod = config && config.modRolesIds.some(roleId => member.roles.cache.has(roleId));
+
+            if (!esAdminDiscord && !tieneRolMod) {
+                return await interaction.reply({
+                    content: '*Te bloquea el paso con el brazo.* Solo los capos y moderadores de la organización deciden el inventario del mostrador.',
+                    ephemeral: true
+                });
+            }
         }
 
         try {
@@ -287,7 +296,7 @@ module.exports = {
             }
 
             // ==========================================
-            // --- SUBCOMANDO: AGREGAR (ADMIN) ---
+            // --- SUBCOMANDO: AGREGAR (ADMIN/MOD) ---
             // ==========================================
             else if (subcommand === 'agregar') {
                 await interaction.deferReply({ ephemeral: true });
@@ -317,7 +326,7 @@ module.exports = {
             }
 
             // ==========================================
-            // --- SUBCOMANDO: QUITAR (ADMIN) ---
+            // --- SUBCOMANDO: QUITAR (ADMIN/MOD) ---
             // ==========================================
             else if (subcommand === 'quitar') {
                 await interaction.deferReply({ ephemeral: true });
