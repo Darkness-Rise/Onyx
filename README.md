@@ -49,7 +49,7 @@
  ┣ 📂 Config            # Archivos de configuración y constantes
  ┣ 📂 Mongodb           # Modelos de Mongoose y lógica de bases de datos
  ┣ 📂 Services          # Servicios externos (OpenRouter, rutinas autónomas, sincronización cloud)
- ┣ 📜 clean-commands.js # Script de limpieza de comandos de Discord
- ┣ 📜 deploy-commands.js# Despliegue automático de slash commands (Desactivado por defecto debe ser activado dependiendo del servidor, este archivo seria una plantilla) 
+ ┣ 📜 clean-commands.js # Script de limpieza de comandos de Discord (Desactivado por defecto, debe ser activado dependiendo del servidor, este archivo seria una plantilla) 
+ ┣ 📜 deploy-commands.js# Despliegue automático de slash commands 
  ┣ 📜 index.js          # Núcleo del bot, servidor web Express y tareas programadas
  ┗ 📜 package.json      # Dependencias del proyecto
