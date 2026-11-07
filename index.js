@@ -33,14 +33,15 @@ app.listen(PORT, () => {
 const fs = require('node:fs');
 const path = require('node:path');
 const { exec } = require('node:child_process');
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, PermissionFlagsBits } = require('discord.js');
 const { consultarOpenRouter } = require('./Services/openrouter');
 // Importación actualizada para conectar y usar la purga global desde cloud.js
 const { conectarDB, purgaGlobalServidor } = require('./Services/cloud');
 // Importación del sistema autónomo modularizado
 const { iniciarSistemaAutonomo } = require('./Services/patrol_routine');
-// Importación del sistema de impuestos (Cuota de protección semanal)
+// Importación del sistema de impuestos (Cuota de protección semanal) y Modelo de Configuración de Servidor
 const { cobrarImpuestosServidor } = require('./Mongodb/economy');
+const ConfigServidor = require('./Mongodb/config'); // <--- Importado para la validación global de roles admin/mod
 
 const client = new Client({
     intents: [
@@ -89,7 +90,6 @@ client.once('ready', async () => {
     iniciarSistemaAutonomo(client);
 
     // --- TAREA PERIÓDICA: COBRO DE CUOTA DE PROTECCIÓN (2% semanal) ---
-    // Se ejecuta cada 24 horas para revisar qué cuentas cumplen el ciclo de 7 días
     setInterval(async () => {
         try {
             for (const [guildId, guild] of client.guilds.cache) {
@@ -113,10 +113,43 @@ client.on('guildDelete', async guild => {
 // -------------------------------------------------------------------------
 
 client.on('interactionCreate', async interaction => {
+    // Manejo de autocompletados
+    if (interaction.isAutocomplete()) {
+        const command = client.commands.get(interaction.commandName);
+        if (!command || !command.autocomplete) return;
+        try {
+            await command.autocomplete(interaction);
+        } catch (error) {
+            console.error(`[ERROR] Falló el autocompletado en /${interaction.commandName}:`, error);
+        }
+        return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     const command = client.commands.get(interaction.commandName);
     if (!command) return;
+
+    // --- VALIDACIÓN GLOBAL DE COMANDOS PROTEGIDOS (adminOnly) ---
+    if (command.adminOnly) {
+        const guildId = interaction.guild.id;
+        const member = interaction.member;
+
+        // 1. ¿Es Administrador de Discord por defecto?
+        const esAdminDiscord = member.permissions.has(PermissionFlagsBits.Administrator);
+
+        // 2. ¿Tiene alguno de los roles de moderador configurados en MongoDB para este servidor?
+        const config = await ConfigServidor.findOne({ guildId });
+        const tieneRolMod = config && config.modRolesIds.some(roleId => member.roles.cache.has(roleId));
+
+        if (!esAdminDiscord && !tieneRolMod) {
+            return await interaction.reply({
+                content: '*Te bloquea el paso con el brazo.* No tienes el rango ni los permisos necesarios de la organización para ejecutar esta orden.',
+                ephemeral: true
+            });
+        }
+    }
+    // -----------------------------------------------------------
 
     try {
         await command.execute(interaction);
