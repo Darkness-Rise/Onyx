@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
+    adminOnly: true, // <--- Protegido automáticamente por el sistema global (Admins + Roles de Mod de /config)
     data: new SlashCommandBuilder()
         .setName('say')
         .setDescription('Envía un mensaje anónimo a través de Onyx.')
@@ -12,28 +13,36 @@ module.exports = {
             option.setName('canal')
                 .setDescription('Canal opcional donde se enviará el mensaje')
                 .setRequired(false))
-        // Opcional: seguridad para que solo ciertos rangos o administradores lo usen
+        // Restricción visual de permisos en Discord para moderadores/gestores
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
     async execute(interaction) {
-        // Obtenemos los argumentos
+        // Respondemos de forma diferida y oculta (ephemeral) para tener tiempo de procesar el envío
+        await interaction.deferReply({ ephemeral: true });
+
         const textoMensaje = interaction.options.getString('mensaje');
         const canalDestino = interaction.options.getChannel('canal') || interaction.channel;
 
         try {
-            // Enviamos el mensaje limpio usando la identidad del bot
+            // Verificamos si el canal destino permite enviar mensajes
+            if (!canalDestino.isTextBased()) {
+                return await interaction.editReply({
+                    content: '⚠️ El canal seleccionado no es un canal de texto válido.'
+                });
+            }
+
+            // Enviamos el mensaje limpio usando la identidad del bot al canal correspondiente
             await canalDestino.send(textoMensaje);
 
-            // Le respondemos de forma oculta (ephemeral) al usuario para confirmar que se envió
-            await interaction.reply({
-                content: `*Mensaje transmitido con éxito en ${canalDestino}. Nivel de sigilo: absoluto.*`,
-                ephemeral: true
+            // Confirmamos de forma oculta al administrador/moderador
+            await interaction.editReply({
+                content: `*Mensaje transmitido con éxito en ${canalDestino}. Nivel de sigilo: absoluto.*`
             });
+
         } catch (error) {
             console.error('Error al enviar mensaje anónimo:', error);
-            await interaction.reply({
-                content: 'Error en la transmisión. No tengo permisos para escribir en ese canal.',
-                ephemeral: true
+            await interaction.editReply({
+                content: '⚠️ *Interferencia en la frecuencia.* No tengo permisos para escribir en ese canal o ocurrió un error.'
             });
         }
     },
