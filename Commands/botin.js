@@ -1,12 +1,13 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { obtenerBalance, Economy } = require('../Mongodb/economy');
+const ConfigServidor = require('../Mongodb/config'); // Importamos el modelo de config para verificar roles de mod
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('botin')
         .setDescription('Gestión de fondos y capital negro en Fallen Ash Realm (FAR).')
         
-        // Subcomando: SALDO
+        // Subcomando: SALDO (Público)
         .addSubcommand(subcommand =>
             subcommand
                 .setName('saldo')
@@ -18,7 +19,7 @@ module.exports = {
                 )
         )
 
-        // Subcomando: TRANSFER
+        // Subcomando: TRANSFER (Público)
         .addSubcommand(subcommand =>
             subcommand
                 .setName('transfer')
@@ -35,7 +36,7 @@ module.exports = {
                 )
         )
         
-        // Subcomando: DEBITAR (Admin)
+        // Subcomando: DEBITAR (Admin/Mod)
         .addSubcommand(subcommand =>
             subcommand
                 .setName('debitar')
@@ -52,7 +53,7 @@ module.exports = {
                 )
         )
         
-        // Subcomando: COBRAR (Admin con Autocompletado de saldo)
+        // Subcomando: COBRAR (Admin/Mod con Autocompletado de saldo)
         .addSubcommand(subcommand =>
             subcommand
                 .setName('cobrar')
@@ -66,7 +67,7 @@ module.exports = {
                     option.setName('cantidad')
                         .setDescription('Cantidad en Euros (€) a restar')
                         .setRequired(true)
-                        .setAutocomplete(true) // 👈 Activamos el autocompletado aquí
+                        .setAutocomplete(true)
                 )
         ),
 
@@ -78,18 +79,15 @@ module.exports = {
             const guildId = interaction.guild.id;
             const targetUser = interaction.options.getUser('cliente');
 
-            // Si el admin aún no ha elegido a un cliente, no mostramos sugerencias de saldo
             if (!targetUser) {
                 return await interaction.respond([
                     { name: '⚠️ Primero selecciona un cliente arriba para ver su saldo disponible', value: 0 }
                 ]);
             }
 
-            // Obtenemos el balance real del usuario seleccionado en este servidor
             const cuenta = await obtenerBalance(targetUser.id, guildId);
             const saldoDisponible = cuenta.dinero;
 
-            // Devolvemos sugerencias útiles para el administrador
             return await interaction.respond([
                 { name: `💰 Saldo disponible del gángster: ${saldoDisponible.toLocaleString()} €`, value: saldoDisponible },
                 ...(saldoDisponible >= 50 ? [{ name: `🚬 Cobrar una cuota estándar (50 €)`, value: 50 }] : []),
@@ -101,13 +99,20 @@ module.exports = {
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const guildId = interaction.guild.id;
+        const member = interaction.member;
 
-        // --- SEGURIDAD DE PERMISOS PARA DEBITAR / COBRAR ---
-        if ((subcommand === 'debitar' || subcommand === 'cobrar') && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return await interaction.reply({
-                content: '*Pule la barra con un trapo sucio y te mira de reojo.* Las cuentas gordas solo las mueven los jefes.',
-                ephemeral: true
-            });
+        // --- VALIDACIÓN DE SEGURIDAD EXCLUSIVA PARA DEBITAR Y COBRAR ---
+        if (subcommand === 'debitar' || subcommand === 'cobrar') {
+            const esAdminDiscord = member.permissions.has(PermissionFlagsBits.Administrator);
+            const config = await ConfigServidor.findOne({ guildId });
+            const tieneRolMod = config && config.modRolesIds.some(roleId => member.roles.cache.has(roleId));
+
+            if (!esAdminDiscord && !tieneRolMod) {
+                return await interaction.reply({
+                    content: '*Pule la barra con un trapo sucio y te mira de reojo.* Las cuentas gordas y los cobros solo los mueven los jefes.',
+                    ephemeral: true
+                });
+            }
         }
 
         try {
