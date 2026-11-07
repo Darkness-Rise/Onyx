@@ -10,6 +10,7 @@ const {
 const ConfigServidor = require('../Mongodb/config');
 
 module.exports = {
+    adminOnly: true, // <--- Protegido automáticamente por el sistema global del index.js
     data: new SlashCommandBuilder()
         .setName('config')
         .setDescription('[ADMIN] Abre el panel interactivo de configuración del bot.')
@@ -50,7 +51,7 @@ module.exports = {
 
             const rowSelect = new ActionRowBuilder().addComponents(selectRol);
 
-            // Botón para limpiar/reiciar los roles configurados
+            // Botón para limpiar/reiniciar los roles configurados
             const rowBotones = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
                     .setCustomId('config_limpiar_roles')
