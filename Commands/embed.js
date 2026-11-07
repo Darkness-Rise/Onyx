@@ -6,11 +6,11 @@ module.exports = {
         .setDescription('Crea un embed personalizado con orden estructurado.')
         .addStringOption(option =>
             option.setName('titulo')
-                .setDescription('Título principal del embed')
+                .setDescription('Título principal del embed (máx. 256 caracteres)')
                 .setRequired(true))
         .addStringOption(option =>
             option.setName('descripcion')
-                .setDescription('Texto o contenido principal del embed')
+                .setDescription('Texto o contenido principal del embed (máx. 4096 caracteres)')
                 .setRequired(true))
         .addStringOption(option =>
             option.setName('color')
@@ -34,51 +34,59 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(interaction) {
-        // 1. Capturamos los datos
+        await interaction.deferReply({ ephemeral: true }); // Ocultamos la confirmación inicial por seguridad
+
         const titulo = interaction.options.getString('titulo');
         const descripcion = interaction.options.getString('descripcion');
-        const colorInput = interaction.options.getString('color') || '#2b2d31'; // Color por defecto
+        const colorInput = interaction.options.getString('color') || '#2b2d31';
         
-        // Autor / Remitente (automático de quien envía o personalizado)
+        // Validaciones de límites de Discord
+        if (titulo.length > 256) {
+            return await interaction.editReply({ content: '⚠️ *El tintero se desborda.* El título no puede superar los 256 caracteres.' });
+        }
+        if (descripcion.length > 4096) {
+            return await interaction.editReply({ content: '⚠️ *El pergamino es demasiado largo.* La descripción no puede superar los 4096 caracteres.' });
+        }
+
+        // Validación estricta de formato Hex para el color
+        const hexRegex = /^#([0-9A-F]{3}){1,2}$/i;
+        const colorFinal = hexRegex.test(colorInput) ? colorInput : '#2b2d31';
+
         const nombreRemitente = interaction.options.getString('remitente') || interaction.user.globalName || interaction.user.username;
         const fotoRemitente = interaction.options.getString('foto_remitente') || interaction.user.displayAvatarURL({ dynamic: true });
 
         const imagenUrl = interaction.options.getString('imagen');
         const footerTexto = interaction.options.getString('footer');
 
-        // 2. Construimos el Embed respetando el orden visual exacto:
-        const embed = new EmbedBuilder();
+        try {
+            const embed = new EmbedBuilder()
+                .setAuthor({
+                    name: nombreRemitente,
+                    iconURL: fotoRemitente
+                })
+                .setTitle(titulo)
+                .setDescription(descripcion)
+                .setColor(colorFinal)
+                .setTimestamp();
 
-        // [1] AUTOR (Arriba del todo)
-        embed.setAuthor({
-            name: nombreRemitente,
-            iconURL: fotoRemitente
-        });
+            if (imagenUrl) {
+                embed.setImage(imagenUrl);
+            }
 
-        // [2] TÍTULO y [3] DESCRIPCIÓN
-        embed.setTitle(titulo)
-             .setDescription(descripcion);
+            if (footerTexto) {
+                embed.setFooter({ 
+                    text: footerTexto, 
+                    iconURL: interaction.user.displayAvatarURL() 
+                });
+            }
 
-        // [4] IMAGEN
-        if (imagenUrl) {
-            embed.setImage(imagenUrl);
+            // Enviamos el embed al canal público y damos aviso efímero de éxito
+            await interaction.channel.send({ embeds: [embed] });
+            await interaction.editReply({ content: '✨ *El documento ha sido sellado y publicado con éxito en el mostrador.*' });
+
+        } catch (error) {
+            console.error('Error al generar el embed personalizado:', error);
+            await interaction.editReply({ content: '⚠️ *La pluma se rompe contra el papel.* Asegúrate de que las URLs de las imágenes sean válidas.' });
         }
-
-        // [5] COLOR
-        embed.setColor(colorInput);
-
-        // [6] FOOTER
-        if (footerTexto) {
-            embed.setFooter({ 
-                text: footerTexto, 
-                iconURL: interaction.user.displayAvatarURL() 
-            });
-        }
-
-        // [7] HORA (Timestamp global adaptado a la zona horaria del lector en Discord)
-        embed.setTimestamp();
-
-        // 3. Enviamos el resultado
-        await interaction.reply({ embeds: [embed] });
     },
 };
