@@ -16,8 +16,9 @@ if (faltantes.length > 0) {
 }
 // -----------------------------------------------
 
-// --- Servidor web integrado para cumplir con los requisitos de Render / Railway ---
+// --- Servidor web integrado y sistema de Auto-Ping para Render ---
 const express = require('express');
+const https = require('https');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -27,6 +28,20 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`Servidor web interno corriendo en el puerto ${PORT}`);
+    
+    // --- AUTO-PING INTERNO ---
+    // Se ejecuta cada 14 minutos para evitar que Render ponga a dormir el servicio gratuito por inactividad
+    setInterval(() => {
+        const renderUrl = process.env.RENDER_EXTERNAL_URL;
+        if (renderUrl) {
+            https.get(renderUrl, (res) => {
+                console.log(`[AUTO-PING] Estado del pulso interno: ${res.statusCode}`);
+            }).on('error', (err) => {
+                console.error('[AUTO-PING Error]:', err.message);
+            });
+        }
+    }, 14 * 60 * 1000);
+    // -------------------------
 });
 // ---------------------------------------------------------------------
 
