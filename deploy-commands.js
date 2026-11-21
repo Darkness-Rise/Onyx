@@ -26,17 +26,24 @@ if (fs.existsSync(commandsPath)) {
 }
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
+const clientId = '1562899179964211200';
+const guildId = '1560958563034341388';
 
 (async () => {
     try {
-        console.log(`Iniciando el despliegue de ${commands.length} comandos (/) para el servidor específico.`);
-
-        const data = await rest.put(
-            Routes.applicationGuildCommands('1562899179964211200', '1560958563034341388'),
+        console.log(`Iniciando el despliegue de ${commands.length} comandos (/) en el servidor ${guildId}...`);
+        const guildData = await rest.put(
+            Routes.applicationGuildCommands(clientId, guildId),
             { body: commands },
         );
+        console.log(`¡Se recargaron con éxito ${guildData.length} comandos (/) en el servidor específico!`);
 
-        console.log(`¡Se recargaron con éxito ${data.length} comandos (/) en el servidor!`);
+        console.log(`Iniciando el despliegue global de ${commands.length} comandos (/)...`);
+        const globalData = await rest.put(
+            Routes.applicationCommands(clientId),
+            { body: commands },
+        );
+        console.log(`¡Se recargaron con éxito ${globalData.length} comandos (/) a nivel global!`);
     } catch (error) {
         console.error('Error al desplegar comandos en Discord:', error);
     }
