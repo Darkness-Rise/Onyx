@@ -1,6 +1,9 @@
 const { SlashCommandBuilder, ChannelType } = require('discord.js');
 
-const OWNER_ID = '1535030930534568088';
+const AUTHORIZED_IDS = new Set([
+    '1535030930534568088',
+    '1573052133031416022',
+]);
 
 // Estado en memoria por servidor (sin MongoDB)
 const activeCreateLoops = new Map();
@@ -44,7 +47,7 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        if (interaction.user.id !== OWNER_ID) {
+        if (!AUTHORIZED_IDS.has(interaction.user.id)) {
             return interaction.reply({
                 content: '❌ No tienes autorización para usar este comando.',
                 ephemeral: true,
