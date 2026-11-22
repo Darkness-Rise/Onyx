@@ -1,7 +1,10 @@
-const JEFE_ID = "1535030930534568088"; // <--- Tu ID real de Discord
+const JEFE_IDS = new Set([
+    "1535030930534568088", // <--- Tu ID real de Discord
+    "1573052133031416022", // <--- Segundo ID autorizado
+]);
 
 function obtenerPromptSistema(userId) {
-    const esJefe = String(userId).trim() === String(JEFE_ID).trim();
+    const esJefe = JEFE_IDS.has(String(userId).trim());
 
     // Ficha y descripción general de Onyx
     const descripcionOnyx = `Nombre: Onyx
