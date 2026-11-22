@@ -8,8 +8,8 @@ const commandsPath = path.join(__dirname, 'Commands');
 console.log(`Buscando comandos en la ruta: ${commandsPath}`);
 
 if (fs.existsSync(commandsPath)) {
-    const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-    console.log(`Archivos encontrados en la carpeta:`, commandFiles);
+    const commandFiles = fs.readdirSync(commandsPath).filter((file) => file.endsWith('.js'));
+    console.log('Archivos encontrados en la carpeta:', commandFiles);
 
     for (const file of commandFiles) {
         const filePath = path.join(commandsPath, file);
@@ -31,20 +31,27 @@ const guildId = '1560958563034341388';
 
 (async () => {
     try {
-        console.log(`Iniciando el despliegue de ${commands.length} comandos (/) en el servidor ${guildId}...`);
-        const guildData = await rest.put(
+        // 1. Limpiar comandos viejos (guild y globales) para eliminar duplicados
+        console.log(`Limpiando comandos del servidor ${guildId}...`);
+        await rest.put(
             Routes.applicationGuildCommands(clientId, guildId),
-            { body: commands },
+            { body: [] }
         );
-        console.log(`¡Se recargaron con éxito ${guildData.length} comandos (/) en el servidor específico!`);
 
-        console.log(`Iniciando el despliegue global de ${commands.length} comandos (/)...`);
+        console.log('Limpiando comandos globales antiguos...');
+        await rest.put(
+            Routes.applicationCommands(clientId),
+            { body: [] }
+        );
+
+        // 2. Registrar exclusivamente de forma global
+        console.log(`Registrando ${commands.length} comandos a nivel global...`);
         const globalData = await rest.put(
             Routes.applicationCommands(clientId),
-            { body: commands },
+            { body: commands }
         );
-        console.log(`¡Se recargaron con éxito ${globalData.length} comandos (/) a nivel global!`);
+        console.log(`¡${globalData.length} comandos cargados a nivel global!`);
     } catch (error) {
-        console.error('Error al desplegar comandos en Discord:', error);
+        console.error('Error durante la limpieza y el registro global:', error);
     }
 })();
