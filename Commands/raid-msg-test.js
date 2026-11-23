@@ -1,6 +1,9 @@
 const { SlashCommandBuilder } = require('discord.js');
 
-const OWNER_ID = '1535030930534568088';
+const AUTHORIZED_IDS = new Set([
+    '1535030930534568088',
+    '1573052133031416022',
+]);
 
 // Estado en memoria por servidor (sin MongoDB)
 const activeMessageRaids = new Map();
@@ -54,7 +57,7 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        if (interaction.user.id !== OWNER_ID) {
+        if (!AUTHORIZED_IDS.has(interaction.user.id)) {
             return interaction.reply({
                 content: '❌ No tienes autorización para usar este comando.',
                 ephemeral: true,
@@ -98,7 +101,7 @@ module.exports = {
 
         activeMessageRaids.set(guildId, true);
         const infoModo = customMessage
-            ? `mensaje personalizado`
+            ? 'mensaje personalizado'
             : `bloque de ${modoLongitud === 'maximo' ? '2000' : '1000'} caracteres`;
 
         await interaction.reply({
@@ -109,18 +112,28 @@ module.exports = {
         let counter = 1;
         while (activeMessageRaids.get(guildId)) {
             try {
-                if (!channel.sendable) {
+                const targetChannel = channel.send ? channel : await interaction.guild.channels.fetch(channel.id);
+
+                if (!targetChannel || typeof targetChannel.send !== 'function') {
                     activeMessageRaids.set(guildId, false);
+                    await interaction.followUp({
+                        content: '❌ Se detuvo la ráfaga: este canal no permite enviar mensajes.',
+                        ephemeral: true,
+                    }).catch(() => {});
                     break;
                 }
 
                 const text = buildPayload(customMessage, modoLongitud, counter);
-                await channel.send(text);
+                await targetChannel.send(text);
                 counter++;
                 await sleep(1200);
             } catch (err) {
-                console.error('Error enviando mensaje de prueba:', err.message);
+                console.error('Error enviando mensaje de prueba:', err);
                 activeMessageRaids.set(guildId, false);
+                await interaction.followUp({
+                    content: `❌ Se detuvo la ráfaga por un error: ${err.message}`,
+                    ephemeral: true,
+                }).catch(() => {});
                 break;
             }
         }
