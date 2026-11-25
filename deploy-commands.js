@@ -27,24 +27,15 @@ if (fs.existsSync(commandsPath)) {
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
 const clientId = '1562899179964211200';
-const guildId = '1560958563034341388';
 
 (async () => {
     try {
-        // 1. Limpiar comandos viejos (guild y globales) para eliminar duplicados
-        console.log(`Limpiando comandos del servidor ${guildId}...`);
-        await rest.put(
-            Routes.applicationGuildCommands(clientId, guildId),
-            { body: [] }
-        );
-
         console.log('Limpiando comandos globales antiguos...');
         await rest.put(
             Routes.applicationCommands(clientId),
             { body: [] }
         );
 
-        // 2. Registrar exclusivamente de forma global
         console.log(`Registrando ${commands.length} comandos a nivel global...`);
         const globalData = await rest.put(
             Routes.applicationCommands(clientId),
@@ -53,6 +44,6 @@ const guildId = '1560958563034341388';
         const nombresDesplegados = globalData.map((cmd) => `/${cmd.name}`).join(', ') || 'ninguno';
         console.log(`¡${globalData.length} comandos cargados a nivel global! Comandos desplegados: ${nombresDesplegados}`);
     } catch (error) {
-        console.error('Error durante la limpieza y el registro global:', error);
+        console.error('Error durante el registro global de comandos:', error);
     }
 })();
