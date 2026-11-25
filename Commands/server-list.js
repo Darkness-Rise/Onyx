@@ -1,4 +1,4 @@
-import {
+const {
   SlashCommandBuilder,
   EmbedBuilder,
   ActionRowBuilder,
@@ -6,7 +6,7 @@ import {
   ButtonStyle,
   MessageFlags,
   ComponentType,
-} from 'discord.js';
+} = require('discord.js');
 
 const PER_PAGE = 10;
 const COLLECTOR_TIME_MS = 120_000; // 2 minutos
@@ -21,7 +21,8 @@ function buildGuildEmbed(guildsList, pageIndex, totalPages, totalGuilds) {
 
   const lines = slice.map((guild, idx) => {
     const num = start + idx + 1;
-    const safeName = guild.name.replace(/([*_`~|>])/g, '\\$1');
+    const rawName = guild.name || 'Servidor sin nombre';
+    const safeName = rawName.replace(/([*_`~|>])/g, '\\$1');
     return `**${num}.** ${safeName}\n\`ID: ${guild.id}\``;
   });
 
@@ -51,7 +52,7 @@ function buildPaginationRow(pageIndex, totalPages, disabledAll = false) {
   return new ActionRowBuilder().addComponents(prevButton, nextButton);
 }
 
-export default {
+module.exports = {
   data: new SlashCommandBuilder()
     .setName('guilds')
     .setDescription('Lista los servidores donde está el bot (máx. 10 por página).'),
@@ -68,9 +69,11 @@ export default {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const fetchedGuilds = await interaction.client.guilds.fetch();
-    const guildsList = Array.from(fetchedGuilds.values()).sort((a, b) =>
-      a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
-    );
+    const guildsList = Array.from(fetchedGuilds.values()).sort((a, b) => {
+      const nameA = a.name || '';
+      const nameB = b.name || '';
+      return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+    });
 
     if (guildsList.length === 0) {
       await interaction.editReply({
