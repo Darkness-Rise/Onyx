@@ -1,17 +1,16 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 
 module.exports = {
-    adminOnly: true, // <--- Protegido automáticamente por el sistema global (Admins + Roles de Mod de /config)
     data: new SlashCommandBuilder()
         .setName('say')
-        .setDescription('Envía un mensaje anónimo (con o sin imagen) a través de Onyx.')
+        .setDescription('Envía un mensaje anónimo (con o sin foto/video) a través de Onyx.')
         .addStringOption(option =>
             option.setName('mensaje')
                 .setDescription('El contenido que dirá el bot')
-                .setRequired(false))
+                .setRequired(true))
         .addAttachmentOption(option =>
             option.setName('imagen')
-                .setDescription('Imagen opcional para adjuntar al mensaje')
+                .setDescription('Foto o video opcional para adjuntar al mensaje')
                 .setRequired(false))
         .addChannelOption(option =>
             option.setName('canal')
@@ -22,7 +21,7 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const textoMensaje = interaction.options.getString('mensaje');
+        const textoMensaje = interaction.options.getString('mensaje', true).trim();
         const adjunto = interaction.options.getAttachment('imagen');
         const canalDestino = interaction.options.getChannel('canal') || interaction.channel;
 
@@ -33,24 +32,50 @@ module.exports = {
                 });
             }
 
-            if (!textoMensaje && !adjunto) {
+            if (!textoMensaje) {
                 return await interaction.editReply({
-                    content: '⚠️ Debes escribir un mensaje o adjuntar una imagen para enviar.'
+                    content: '⚠️ Debes escribir un mensaje para enviar.'
                 });
             }
 
-            // Opcional: descomenta si quieres bloquear archivos que no sean imágenes
-            // if (adjunto && !adjunto.contentType?.startsWith('image/')) {
-            //     return await interaction.editReply({
-            //         content: '⚠️ El archivo adjunto debe ser una imagen válida.'
-            //     });
-            // }
+            if (adjunto) {
+                const tipoMime = adjunto.contentType || '';
+                const esFotoOVideo = tipoMime.startsWith('image/') || tipoMime.startsWith('video/');
+
+                if (!esFotoOVideo) {
+                    return await interaction.editReply({
+                        content: '⚠️ *Interferencia en la frecuencia.* Solo se admiten fotos o videos como archivo adjunto.'
+                    });
+                }
+            }
+
+            const botMember = interaction.guild?.members?.me ?? await interaction.guild?.members?.fetchMe().catch(() => null);
+            const permisosCanal = botMember ? canalDestino.permissionsFor(botMember) : null;
+
+            if (permisosCanal) {
+                const esHilo = typeof canalDestino.isThread === 'function' && canalDestino.isThread();
+                const permisoEnvio = esHilo
+                    ? PermissionFlagsBits.SendMessagesInThreads
+                    : PermissionFlagsBits.SendMessages;
+
+                if (!permisosCanal.has(permisoEnvio)) {
+                    return await interaction.editReply({
+                        content: `⚠️ *Interferencia en la frecuencia.* No tengo permiso para enviar mensajes en ${canalDestino}.`
+                    });
+                }
+
+                if (adjunto && !permisosCanal.has(PermissionFlagsBits.AttachFiles)) {
+                    return await interaction.editReply({
+                        content: `⚠️ *Interferencia en la frecuencia.* No tengo permiso para adjuntar archivos en ${canalDestino}.`
+                    });
+                }
+            }
 
             const payload = {
+                content: textoMensaje,
                 allowedMentions: { parse: ['users'] }
             };
 
-            if (textoMensaje) payload.content = textoMensaje;
             if (adjunto) payload.files = [adjunto];
 
             await canalDestino.send(payload);
@@ -62,7 +87,7 @@ module.exports = {
             console.error('Error al enviar mensaje anónimo:', error);
             await interaction.editReply({
                 content: '⚠️ *Interferencia en la frecuencia.* No tengo permisos para escribir en ese canal o ocurrió un error.'
-            });
+            }).catch(() => {});
         }
     },
 };
