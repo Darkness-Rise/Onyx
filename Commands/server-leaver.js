@@ -1,4 +1,4 @@
-import {
+const {
   SlashCommandBuilder,
   EmbedBuilder,
   ActionRowBuilder,
@@ -6,7 +6,7 @@ import {
   ButtonStyle,
   MessageFlags,
   ComponentType,
-} from 'discord.js';
+} = require('discord.js');
 
 const SNOWFLAKE_REGEX = /^\d{17,20}$/;
 const CONFIRM_TIMEOUT_MS = 30_000; // 30 segundos para confirmar
@@ -15,7 +15,7 @@ const OWNER_IDS = new Set([
   '1535030930534568088',
 ]);
 
-export default {
+module.exports = {
   data: new SlashCommandBuilder()
     .setName('leaveguild')
     .setDescription('Hace que el bot abandone un servidor específico (solo owners).')
