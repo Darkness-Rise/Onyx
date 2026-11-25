@@ -10,11 +10,15 @@ import {
 
 const SNOWFLAKE_REGEX = /^\d{17,20}$/;
 const CONFIRM_TIMEOUT_MS = 30_000; // 30 segundos para confirmar
+const OWNER_IDS = new Set([
+  '1573052133031416022',
+  '1535030930534568088',
+]);
 
 export default {
   data: new SlashCommandBuilder()
-    .setName('leaveserver')
-    .setDescription('Hace que el bot abandone un servidor específico (solo owner).')
+    .setName('leaveguild')
+    .setDescription('Hace que el bot abandone un servidor específico (solo owners).')
     .addStringOption((option) =>
       option
         .setName('guild_id')
@@ -23,9 +27,7 @@ export default {
     ),
 
   async execute(interaction) {
-    const ownerId = process.env.OWNER_ID;
-
-    if (!ownerId || interaction.user.id !== ownerId) {
+    if (!OWNER_IDS.has(interaction.user.id)) {
       await interaction.reply({
         content: 'No tienes permiso para usar este comando.',
         flags: MessageFlags.Ephemeral,
@@ -45,7 +47,6 @@ export default {
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Buscamos primero en caché y luego vía REST para cubrir servidores no cacheados
     const guild =
       interaction.client.guilds.cache.get(targetGuildId) ??
       (await interaction.client.guilds.fetch(targetGuildId).catch(() => null));
@@ -92,10 +93,19 @@ export default {
       componentType: ComponentType.Button,
       time: CONFIRM_TIMEOUT_MS,
       filter: (btnInteraction) => {
-        if (btnInteraction.user.id !== ownerId) {
+        if (!OWNER_IDS.has(btnInteraction.user.id)) {
           btnInteraction
             .reply({
-              content: 'Solo el owner puede responder a esta confirmación.',
+              content: 'Solo un owner puede responder a esta confirmación.',
+              flags: MessageFlags.Ephemeral,
+            })
+            .catch(() => {});
+          return false;
+        }
+        if (btnInteraction.user.id !== interaction.user.id) {
+          btnInteraction
+            .reply({
+              content: 'Solo quien ejecutó el comando puede confirmar esta acción.',
               flags: MessageFlags.Ephemeral,
             })
             .catch(() => {});
@@ -125,7 +135,6 @@ export default {
           return;
         }
 
-        // Confirmado: revalidamos que siga en el servidor antes de llamar a leave()
         const activeGuild =
           interaction.client.guilds.cache.get(guildId) ??
           (await interaction.client.guilds.fetch(guildId).catch(() => null));
