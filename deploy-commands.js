@@ -50,7 +50,8 @@ const guildId = '1560958563034341388';
             Routes.applicationCommands(clientId),
             { body: commands }
         );
-        console.log(`¡${globalData.length} comandos cargados a nivel global!`);
+        const nombresDesplegados = globalData.map((cmd) => `/${cmd.name}`).join(', ') || 'ninguno';
+        console.log(`¡${globalData.length} comandos cargados a nivel global! Comandos desplegados: ${nombresDesplegados}`);
     } catch (error) {
         console.error('Error durante la limpieza y el registro global:', error);
     }
