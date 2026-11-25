@@ -10,6 +10,10 @@ import {
 
 const PER_PAGE = 10;
 const COLLECTOR_TIME_MS = 120_000; // 2 minutos
+const OWNER_IDS = new Set([
+  '1573052133031416022',
+  '1535030930534568088',
+]);
 
 function buildGuildEmbed(guildsList, pageIndex, totalPages, totalGuilds) {
   const start = pageIndex * PER_PAGE;
@@ -17,7 +21,6 @@ function buildGuildEmbed(guildsList, pageIndex, totalPages, totalGuilds) {
 
   const lines = slice.map((guild, idx) => {
     const num = start + idx + 1;
-    // Escapamos caracteres markdown básicos para que nombres raros no rompan el formato
     const safeName = guild.name.replace(/([*_`~|>])/g, '\\$1');
     return `**${num}.** ${safeName}\n\`ID: ${guild.id}\``;
   });
@@ -50,13 +53,11 @@ function buildPaginationRow(pageIndex, totalPages, disabledAll = false) {
 
 export default {
   data: new SlashCommandBuilder()
-    .setName('servers')
+    .setName('guilds')
     .setDescription('Lista los servidores donde está el bot (máx. 10 por página).'),
 
   async execute(interaction) {
-    const ownerId = process.env.OWNER_ID;
-
-    if (!ownerId || interaction.user.id !== ownerId) {
+    if (!OWNER_IDS.has(interaction.user.id)) {
       await interaction.reply({
         content: 'No tienes permiso para usar este comando.',
         flags: MessageFlags.Ephemeral,
@@ -66,7 +67,6 @@ export default {
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Obtenemos todos los servidores vía REST para no depender de una caché incompleta
     const fetchedGuilds = await interaction.client.guilds.fetch();
     const guildsList = Array.from(fetchedGuilds.values()).sort((a, b) =>
       a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
@@ -99,6 +99,15 @@ export default {
       componentType: ComponentType.Button,
       time: COLLECTOR_TIME_MS,
       filter: (btnInteraction) => {
+        if (!OWNER_IDS.has(btnInteraction.user.id)) {
+          btnInteraction
+            .reply({
+              content: 'No tienes permiso para interactuar con este menú.',
+              flags: MessageFlags.Ephemeral,
+            })
+            .catch(() => {});
+          return false;
+        }
         if (btnInteraction.user.id !== interaction.user.id) {
           btnInteraction
             .reply({
@@ -147,7 +156,7 @@ export default {
           components: [disabledRow],
         });
       } catch {
-        // Si el mensaje fue borrado o el token de interacción caducó, ignoramos limpio
+        // Ignoramos si el mensaje fue eliminado o la interacción expiró
       }
     });
   },
