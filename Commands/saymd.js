@@ -5,10 +5,9 @@ const {
   ApplicationIntegrationType,
 } = require('discord.js');
 
-const DEFAULT_MESSAGE = 'RaidBypanas - https://discord.gg/yDkV9RdJpK , https://www.youtube.com/c/alann2007';
 const INTERVAL_MS = 450;
 const MIN_REPEATS = 1;
-const MAX_REPEATS = 10;
+const MAX_REPEATS = 100;
 const DEFAULT_REPEATS = 5;
 
 function sleep(ms) {
@@ -25,39 +24,49 @@ function isValidHttpUrl(value) {
 }
 
 function buildPayload({ text, imageUrl, attachment }) {
-  const cleanText = text ? text.trim() : '';
+  const cleanText = text.trim();
   const cleanUrl = imageUrl ? imageUrl.trim() : '';
   const files = attachment ? [{ attachment: attachment.url, name: attachment.name }] : undefined;
-
-  let content = null;
-  if (cleanText && cleanUrl) {
-    content = `${cleanText}\n${cleanUrl}`;
-  } else if (cleanText) {
-    content = cleanText;
-  } else if (cleanUrl) {
-    content = cleanUrl;
-  } else if (!files) {
-    content = DEFAULT_MESSAGE;
-  }
+  const content = cleanUrl ? `${cleanText}\n${cleanUrl}` : cleanText;
 
   return {
-    ...(content ? { content } : {}),
+    content,
     ...(files ? { files } : {}),
   };
 }
 
 async function sendRepeated(user, payload, repeats) {
+  let sent = 0;
+  let failed = 0;
+  let reason = null;
+
   for (let i = 0; i < repeats; i += 1) {
     try {
       await user.send(payload);
+      sent += 1;
     } catch (error) {
-      console.error(`Error enviando MD a ${user.tag} (${user.id}):`, error.message);
+      failed += 1;
+      reason = error.message || 'Error al enviar MD';
+      console.error(`Error enviando MD a ${user.tag} (${user.id}):`, reason);
       break;
     }
 
     if (i < repeats - 1) {
       await sleep(INTERVAL_MS);
     }
+  }
+
+  return { sent, failed, reason };
+}
+
+async function sendWhisper(interaction, content) {
+  try {
+    await interaction.followUp({
+      content,
+      ephemeral: true,
+    });
+  } catch (error) {
+    console.error('No se pudo enviar el whisper de estado:', error.message);
   }
 }
 
@@ -74,16 +83,16 @@ module.exports = {
       InteractionContextType.BotDM,
       InteractionContextType.PrivateChannel,
     ])
+    .addStringOption((option) =>
+      option
+        .setName('mensaje')
+        .setDescription('Texto del mensaje a enviar')
+        .setRequired(true)
+    )
     .addUserOption((option) =>
       option
         .setName('usuario')
         .setDescription('Destinatario específico opcional')
-        .setRequired(false)
-    )
-    .addStringOption((option) =>
-      option
-        .setName('mensaje')
-        .setDescription('Texto del mensaje (si se omite, usa el mensaje por defecto)')
         .setRequired(false)
     )
     .addIntegerOption((option) =>
@@ -108,11 +117,18 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    const customMessage = interaction.options.getString('mensaje', true);
     const explicitUser = interaction.options.getUser('usuario');
-    const customMessage = interaction.options.getString('mensaje');
     const rawRepeats = interaction.options.getInteger('cantidad');
     const attachment = interaction.options.getAttachment('archivo');
     const imageUrl = interaction.options.getString('imagen');
+
+    if (!customMessage.trim()) {
+      return interaction.reply({
+        content: 'El mensaje no puede estar vacío.',
+        ephemeral: true,
+      });
+    }
 
     if (attachment && !attachment.contentType?.startsWith('image/')) {
       return interaction.reply({
@@ -147,7 +163,17 @@ module.exports = {
         content: `Enviando (${repeats}x) a **${explicitUser.tag}**...`,
         ephemeral: true,
       });
-      await sendRepeated(explicitUser, payload, repeats);
+
+      const result = await sendRepeated(explicitUser, payload, repeats);
+      const completed = result.sent === repeats && result.failed === 0;
+
+      const whisperText = completed
+        ? `Envío completado: **${result.sent}/${repeats}** mensajes entregados a **${explicitUser.tag}**.`
+        : `Envío incompleto a **${explicitUser.tag}**: **${result.sent}/${repeats}** entregados${
+            result.reason ? ` (${result.reason})` : ''
+          }.`;
+
+      await sendWhisper(interaction, whisperText);
       return;
     }
 
@@ -165,7 +191,17 @@ module.exports = {
         content: `Enviando (${repeats}x) a **${recipient.tag}** desde este MD...`,
         ephemeral: true,
       });
-      await sendRepeated(recipient, payload, repeats);
+
+      const result = await sendRepeated(recipient, payload, repeats);
+      const completed = result.sent === repeats && result.failed === 0;
+
+      const whisperText = completed
+        ? `Envío completado: **${result.sent}/${repeats}** mensajes entregados a **${recipient.tag}**.`
+        : `Envío incompleto a **${recipient.tag}**: **${result.sent}/${repeats}** entregados${
+            result.reason ? ` (${result.reason})` : ''
+          }.`;
+
+      await sendWhisper(interaction, whisperText);
       return;
     }
 
@@ -185,8 +221,25 @@ module.exports = {
       ephemeral: true,
     });
 
+    let totalSent = 0;
+    let totalFailed = 0;
+    let incompleteUsers = 0;
+    const expectedTotal = targets.size * repeats;
+
     for (const member of targets.values()) {
-      await sendRepeated(member.user, payload, repeats);
+      const result = await sendRepeated(member.user, payload, repeats);
+      totalSent += result.sent;
+      totalFailed += result.failed;
+      if (result.sent < repeats || result.failed > 0) {
+        incompleteUsers += 1;
+      }
     }
+
+    const allCompleted = totalSent === expectedTotal && totalFailed === 0;
+    const whisperText = allCompleted
+      ? `Envío completado al 100%: **${totalSent}/${expectedTotal}** mensajes entregados a **${targets.size}** usuarios.`
+      : `Envío no completado del todo: **${totalSent}/${expectedTotal}** entregados (${incompleteUsers} usuario(s) con fallo o incompletos).`;
+
+    await sendWhisper(interaction, whisperText);
   },
 };
