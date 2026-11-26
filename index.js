@@ -57,6 +57,8 @@ const { iniciarSistemaAutonomo } = require('./Services/patrol_routine');
 // Importación del sistema de impuestos (Cuota de protección semanal) y Modelo de Configuración de Servidor
 const { cobrarImpuestosServidor } = require('./Mongodb/economy');
 const ConfigServidor = require('./Mongodb/config'); // <--- Importado para la validación global de roles admin/mod y canales
+// Servicio centralizado de colas con @sapphire/async-queue
+const { colaIA, colaEconomia, colaComandos, ejecutarEnCola } = require('./Services/@sapphire-async-queue.js');
 
 const client = new Client({
     intents: [
@@ -107,12 +109,14 @@ client.once('ready', async () => {
     // --- TAREA PERIÓDICA: COBRO DE CUOTA DE PROTECCIÓN (2% semanal) ---
     setInterval(async () => {
         try {
-            for (const [guildId, guild] of client.guilds.cache) {
-                const totalRecaudado = await cobrarImpuestosServidor(guildId);
-                if (totalRecaudado > 0) {
-                    console.log(`[IMPUESTOS] La organización cobró la cuota de protección en ${guild.name}: ${totalRecaudado.toLocaleString()} € recaudados.`);
+            await ejecutarEnCola(colaEconomia, async () => {
+                for (const [guildId, guild] of client.guilds.cache) {
+                    const totalRecaudado = await cobrarImpuestosServidor(guildId);
+                    if (totalRecaudado > 0) {
+                        console.log(`[IMPUESTOS] La organización cobró la cuota de protección en ${guild.name}: ${totalRecaudado.toLocaleString()} € recaudados.`);
+                    }
                 }
-            }
+            });
         } catch (err) {
             console.error('Error aplicando la cuota de protección automática:', err);
         }
@@ -123,7 +127,13 @@ client.once('ready', async () => {
 // --- EVENTO: Barrido y purga global automática cuando el bot deja un servidor ---
 client.on('guildDelete', async guild => {
     console.log(`[SISTEMA] Onyx fue expulsado o abandonado del servidor: ${guild.name} (${guild.id})`);
-    await purgaGlobalServidor(guild.id);
+    try {
+        await ejecutarEnCola(colaEconomia, async () => {
+            await purgaGlobalServidor(guild.id);
+        });
+    } catch (err) {
+        console.error(`[ERROR] Falló la purga global en guildDelete (${guild.id}):`, err);
+    }
 });
 // -------------------------------------------------------------------------
 
@@ -147,60 +157,62 @@ client.on('interactionCreate', async interaction => {
     if (!command) return;
 
     try {
-        // Si la interacción ocurre en un servidor, aplicamos configuración, canales y roles
-        if (interaction.guild && interaction.member) {
-            const guildId = interaction.guild.id;
-            const member = interaction.member;
-            const channelId = interaction.channel?.id;
+        await ejecutarEnCola(colaComandos, async () => {
+            // Si la interacción ocurre en un servidor, aplicamos configuración, canales y roles
+            if (interaction.guild && interaction.member) {
+                const guildId = interaction.guild.id;
+                const member = interaction.member;
+                const channelId = interaction.channel?.id;
 
-            // --- BUSCAR CONFIGURACIÓN DEL SERVIDOR EN MONGODB ---
-            const config = await ConfigServidor.findOne({ guildId });
+                // --- BUSCAR CONFIGURACIÓN DEL SERVIDOR EN MONGODB ---
+                const config = await ConfigServidor.findOne({ guildId });
 
-            // --- VALIDACIÓN DE RESTRICCIÓN DE CANALES ---
-            if (config && config.restriccionesCanales && config.restriccionesCanales.length > 0 && channelId) {
-                const restriccionesComando = config.restriccionesCanales.filter(r => r.comando === commandName);
+                // --- VALIDACIÓN DE RESTRICCIÓN DE CANALES ---
+                if (config && config.restriccionesCanales && config.restriccionesCanales.length > 0 && channelId) {
+                    const restriccionesComando = config.restriccionesCanales.filter(r => r.comando === commandName);
 
-                if (restriccionesComando.length > 0) {
-                    const canalPermitido = restriccionesComando.some(r => r.canalId === channelId);
+                    if (restriccionesComando.length > 0) {
+                        const canalPermitido = restriccionesComando.some(r => r.canalId === channelId);
 
-                    if (!canalPermitido) {
-                        const canalesMencion = restriccionesComando.map(r => `<#${r.canalId}>`).join(', ');
+                        if (!canalPermitido) {
+                            const canalesMencion = restriccionesComando.map(r => `<#${r.canalId}>`).join(', ');
+                            return await interaction.reply({
+                                content: `*Te bloquea el paso con el brazo.* Este tipo de operaciones no se hacen aquí. Dirígete al canal autorizado: ${canalesMencion}.`,
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+                // --------------------------------------------
+
+                // --- VALIDACIÓN GLOBAL DE COMANDOS PROTEGIDOS (adminOnly) ---
+                if (command.adminOnly) {
+                    const esAdminDiscord = member.permissions?.has
+                        ? member.permissions.has(PermissionFlagsBits.Administrator)
+                        : false;
+
+                    const tieneRolMod = config && Array.isArray(config.modRolesIds)
+                        ? config.modRolesIds.some(roleId => member.roles?.cache?.has(roleId))
+                        : false;
+
+                    if (!esAdminDiscord && !tieneRolMod) {
                         return await interaction.reply({
-                            content: `*Te bloquea el paso con el brazo.* Este tipo de operaciones no se hacen aquí. Dirígete al canal autorizado: ${canalesMencion}.`,
+                            content: '*Te bloquea el paso con el brazo.* No tienes el rango ni los permisos necesarios de la organización para ejecutar esta orden.',
                             ephemeral: true
                         });
                     }
                 }
+                // -----------------------------------------------------------
+            } else if (command.adminOnly) {
+                // En MD no hay roles de servidor ni permisos de administrador de guild
+                return await interaction.reply({
+                    content: '*Te bloquea el paso con el brazo.* Este comando solo puede usarse dentro de un servidor.',
+                    ephemeral: true
+                });
             }
-            // --------------------------------------------
 
-            // --- VALIDACIÓN GLOBAL DE COMANDOS PROTEGIDOS (adminOnly) ---
-            if (command.adminOnly) {
-                const esAdminDiscord = member.permissions?.has
-                    ? member.permissions.has(PermissionFlagsBits.Administrator)
-                    : false;
-
-                const tieneRolMod = config && Array.isArray(config.modRolesIds)
-                    ? config.modRolesIds.some(roleId => member.roles?.cache?.has(roleId))
-                    : false;
-
-                if (!esAdminDiscord && !tieneRolMod) {
-                    return await interaction.reply({
-                        content: '*Te bloquea el paso con el brazo.* No tienes el rango ni los permisos necesarios de la organización para ejecutar esta orden.',
-                        ephemeral: true
-                    });
-                }
-            }
-            // -----------------------------------------------------------
-        } else if (command.adminOnly) {
-            // En MD no hay roles de servidor ni permisos de administrador de guild
-            return await interaction.reply({
-                content: '*Te bloquea el paso con el brazo.* Este comando solo puede usarse dentro de un servidor.',
-                ephemeral: true
-            });
-        }
-
-        await command.execute(interaction);
+            await command.execute(interaction);
+        });
     } catch (error) {
         console.error(`[ERROR] Falló la ejecución del comando /${commandName}:`, error);
         
@@ -239,9 +251,11 @@ client.on('messageCreate', async (message) => {
         await message.channel.sendTyping();
 
         try {
-            const userId = message.author.id;
-            const respuestaIA = await consultarOpenRouter(prompt, userId);
-            await message.reply(respuestaIA);
+            await ejecutarEnCola(colaIA, async () => {
+                const userId = message.author.id;
+                const respuestaIA = await consultarOpenRouter(prompt, userId);
+                await message.reply(respuestaIA);
+            });
         } catch (error) {
             console.error("Error al consultar OpenRouter:", error);
             await message.reply("*Da un golpecito seco en su auricular.* Comandante, la transmisión falló un segundo. Reintente.");
