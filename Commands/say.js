@@ -143,20 +143,20 @@ module.exports = {
                 });
             }
 
-            // Caso 3: En MD (interaction.guild es null)
-            const canalMD = interaction.channel && interaction.channel.isTextBased()
+            // Caso 3: Fuera de servidor (MD / conversación privada)
+            const canalDestinoMD = interaction.channel && typeof interaction.channel.send === 'function'
                 ? interaction.channel
                 : await interaction.user.createDM();
 
-            await canalMD.send(payload);
+            await canalDestinoMD.send(payload);
 
             await interaction.editReply({
-                content: '*Mensaje transmitido con éxito en este MD. Nivel de sigilo: absoluto.*'
+                content: '*Mensaje transmitido con éxito en esta conversación. Nivel de sigilo: absoluto.*'
             });
         } catch (error) {
             console.error('Error al enviar mensaje anónimo:', error);
             await interaction.editReply({
-                content: '⚠️ *Interferencia en la frecuencia.* No se pudo enviar el mensaje en este canal o MD.'
+                content: '⚠️ *Interferencia en la frecuencia.* No se pudo enviar el mensaje en esta conversación.'
             }).catch(() => {});
         }
     },
