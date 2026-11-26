@@ -146,52 +146,60 @@ client.on('interactionCreate', async interaction => {
     const command = client.commands.get(commandName);
     if (!command) return;
 
-    const guildId = interaction.guild.id;
-    const member = interaction.member;
-    const channelId = interaction.channel.id;
+    try {
+        // Si la interacción ocurre en un servidor, aplicamos configuración, canales y roles
+        if (interaction.guild && interaction.member) {
+            const guildId = interaction.guild.id;
+            const member = interaction.member;
+            const channelId = interaction.channel?.id;
 
-    // --- BUSCAR CONFIGURACIÓN DEL SERVIDOR EN MONGODB ---
-    const config = await ConfigServidor.findOne({ guildId });
+            // --- BUSCAR CONFIGURACIÓN DEL SERVIDOR EN MONGODB ---
+            const config = await ConfigServidor.findOne({ guildId });
 
-    // --- VALIDACIÓN DE RESTRICCIÓN DE CANALES ---
-    if (config && config.restriccionesCanales && config.restriccionesCanales.length > 0) {
-        // Buscamos si este comando tiene restricciones asignadas
-        const restriccionesComando = config.restriccionesCanales.filter(r => r.comando === commandName);
-        
-        if (restriccionesComando.length > 0) {
-            // Verificamos si el canal actual está dentro de los permitidos para este comando
-            const canalPermitido = restriccionesComando.some(r => r.canalId === channelId);
+            // --- VALIDACIÓN DE RESTRICCIÓN DE CANALES ---
+            if (config && config.restriccionesCanales && config.restriccionesCanales.length > 0 && channelId) {
+                const restriccionesComando = config.restriccionesCanales.filter(r => r.comando === commandName);
 
-            if (!canalPermitido) {
-                // Obtenemos las menciones de los canales permitidos para informarle al usuario dónde debe usarlo
-                const canalesMencion = restriccionesComando.map(r => `<#${r.canalId}>`).join(', ');
-                return await interaction.reply({
-                    content: `*Te bloquea el paso con el brazo.* Este tipo de operaciones no se hacen aquí. Dirígete al canal autorizado: ${canalesMencion}.`,
-                    ephemeral: true
-                });
+                if (restriccionesComando.length > 0) {
+                    const canalPermitido = restriccionesComando.some(r => r.canalId === channelId);
+
+                    if (!canalPermitido) {
+                        const canalesMencion = restriccionesComando.map(r => `<#${r.canalId}>`).join(', ');
+                        return await interaction.reply({
+                            content: `*Te bloquea el paso con el brazo.* Este tipo de operaciones no se hacen aquí. Dirígete al canal autorizado: ${canalesMencion}.`,
+                            ephemeral: true
+                        });
+                    }
+                }
             }
-        }
-    }
-    // --------------------------------------------
+            // --------------------------------------------
 
-    // --- VALIDACIÓN GLOBAL DE COMANDOS PROTEGIDOS (adminOnly) ---
-    if (command.adminOnly) {
-        // 1. ¿Es Administrador de Discord por defecto?
-        const esAdminDiscord = member.permissions.has(PermissionFlagsBits.Administrator);
+            // --- VALIDACIÓN GLOBAL DE COMANDOS PROTEGIDOS (adminOnly) ---
+            if (command.adminOnly) {
+                const esAdminDiscord = member.permissions?.has
+                    ? member.permissions.has(PermissionFlagsBits.Administrator)
+                    : false;
 
-        // 2. ¿Tiene alguno de los roles de moderador configurados en MongoDB para este servidor?
-        const tieneRolMod = config && config.modRolesIds.some(roleId => member.roles.cache.has(roleId));
+                const tieneRolMod = config && Array.isArray(config.modRolesIds)
+                    ? config.modRolesIds.some(roleId => member.roles?.cache?.has(roleId))
+                    : false;
 
-        if (!esAdminDiscord && !tieneRolMod) {
+                if (!esAdminDiscord && !tieneRolMod) {
+                    return await interaction.reply({
+                        content: '*Te bloquea el paso con el brazo.* No tienes el rango ni los permisos necesarios de la organización para ejecutar esta orden.',
+                        ephemeral: true
+                    });
+                }
+            }
+            // -----------------------------------------------------------
+        } else if (command.adminOnly) {
+            // En MD no hay roles de servidor ni permisos de administrador de guild
             return await interaction.reply({
-                content: '*Te bloquea el paso con el brazo.* No tienes el rango ni los permisos necesarios de la organización para ejecutar esta orden.',
+                content: '*Te bloquea el paso con el brazo.* Este comando solo puede usarse dentro de un servidor.',
                 ephemeral: true
             });
         }
-    }
-    // -----------------------------------------------------------
 
-    try {
         await command.execute(interaction);
     } catch (error) {
         console.error(`[ERROR] Falló la ejecución del comando /${commandName}:`, error);
