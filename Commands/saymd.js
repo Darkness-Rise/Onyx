@@ -7,7 +7,7 @@ const {
 
 const INTERVAL_MS = 450;
 const MIN_REPEATS = 1;
-const MAX_REPEATS = 100;
+const MAX_REPEATS = 20;
 const DEFAULT_REPEATS = 5;
 
 function sleep(ms) {
